@@ -1,0 +1,390 @@
+Strict
+Import mojo2
+Import brl.databuffer
+Import mojo.color
+
+Class ImageFilter
+	Field db:DataBuffer
+	Field w:Int,h:Int
+	Field ox:Float,oy:Float
+
+	Field img:Image
+	Field change:Bool
+	
+	Field snap:DataBuffer
+	
+	Const NEGATIVE:=0
+	Const GREYSCALE:=1
+	Const STRETCH:=2
+	Const BIT:=3
+	Const SATURATE:=4
+	Const MEAN:=5
+	Const GAUSSIAN:=6
+	Const EDGE:=7
+	Const CEL:=8
+	
+	Const STACK:=0
+	Const SNAPSHOT:=1
+	
+	Method SetImage:Void(img:Image)
+		w = img.Width
+		h = img.Height
+		ox = img.HandleX()
+		oy = img.HandleY()
+		
+		If db Then db=Null
+		db = New DataBuffer(w * h * 4)
+		
+		Local i:Image = New Image(w,h)
+		Local cnvs:Canvas = New Canvas(i)
+		cnvs.DrawImage img,0,0
+		cnvs.Flush()
+		cnvs.ReadPixels(0,0,w,h,db,0,0)
+		
+		For Local i:Int = 0 Until db.Length() Step 4
+			db.PokeInt i,abgr2argb(DrawList.PremultiplyArgb2Abgr(db.PeekInt(i)))
+		End
+		
+		CreateSnapshot()
+		
+		i.Discard()
+	End
+
+	Method RevertSnapshot:Void()
+		For Local i:Int = 0 Until db.Length()
+			db.PokeInt i,snap.PeekInt(i)
+		Next
+		change=True
+	End
+		
+	Method CreateSnapshot:Void()
+		If snap Then snap=Null
+		snap = New DataBuffer(db.Length())
+		For Local i:Int = 0 Until db.Length()
+			snap.PokeInt i,db.PeekInt(i)
+		Next
+	End
+	
+	Method New(img:Image)
+		SetImage(img)
+	End
+	
+	Method ApplyFilter:Void(effect:Int)
+		ApplyFilter(effect,0,STACK)
+	End
+
+	Method ApplyFilter:Void(effect:Int,v:Float)
+		ApplyFilter(effect,v,STACK)
+	End
+	
+	Method ApplyFilter:Void(effect:Int,v:Float,buffer:Int)
+		Local buf:DataBuffer
+
+		Select buffer
+		Case SNAPSHOT
+			buf = snap
+		Default
+			buf = db
+		End
+
+		Select effect
+		Case NEGATIVE
+			filter_negative(buf)
+		Case GREYSCALE
+			filter_greyscale(buf,buf)
+		Case STRETCH
+			filter_stretch(buf)
+		Case BIT
+			filter_bit(Int(v),buf)
+		Case SATURATE
+			filter_saturate(v,buf)
+		Case MEAN
+			filter_mean(Int(v),buf)
+		Case GAUSSIAN
+			filter_gaussian(Int(v),buf)
+		Case EDGE
+			filter_edge(Int(v),buf)
+		Case CEL
+			filter_cel(Int(v),buf)
+		End
+		
+		change=True
+	End
+	
+	' edge maths from here https://www.shadertoy.com/view/4slSzl
+	Method filter_edge:Void(thick:Int,buf:DataBuffer)
+		If thick<1 Then Return
+		If thick>3 Then thick=3
+		thick=255-thick*64
+		
+		filter_gaussian(2,buf)
+		Local kx:Int[] = [-1, 0, 1, -2, 0, 2,-1, 0, 1]
+		Local ky:Int[] = [1, 2, 1, 0, 0, 0, -1, -2, -1]
+		
+		Local ix:DataBuffer = New DataBuffer(w*h*4)
+		filter_greyscale(buf,ix)
+		
+		For Local i:Int = 1 Until h-1
+		For Local j:Int = 1 Until w-1
+			Local t00:Int = ix.PeekInt( ((j-1) + (i-1)*w) *4 ) & 255
+			Local t10:Int = ix.PeekInt( ((j-0) + (i-1)*w) *4 ) & 255
+			Local t20:Int = ix.PeekInt( ((j+1) + (i-1)*w) *4 ) & 255
+			Local t01:Int = ix.PeekInt( ((j-1) + (i-0)*w) *4 ) & 255
+			Local t21:Int = ix.PeekInt( ((j+1) + (i-0)*w) *4 ) & 255
+			Local t02:Int = ix.PeekInt( ((j-1) + (i+1)*w) *4 ) & 255
+			Local t12:Int = ix.PeekInt( ((j-0) + (i+1)*w) *4 ) & 255
+			Local t22:Int = ix.PeekInt( ((j+1) + (i+1)*w) *4 ) & 255
+
+			Local gradx:Float = t00 + 2.0 * t01 + t02 - t20 - 2.0 * t21 - t22;
+			Local grady:Float = t00 + 2.0 * t10 + t20 - t02 - 2.0 * t12 - t22;
+			Local l:Float = Sqrt(gradx*gradx + grady*grady)
+			
+			If l>thick
+				Local pen:Int = ((l-thick)/Float(thick) * 255.0) Shl 24
+				buf.PokeInt (j + i*w) *4, pen + $000000
+			Else
+				buf.PokeInt (j + i*w) *4,$00000000
+			End
+
+		Next
+		Next
+#rem				
+	Float t00 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0, -1.0)));
+	Float t10 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0, -1.0)));
+	Float t20 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0, -1.0)));
+	Float t01 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0,  0.0)));
+	Float t21 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0,  0.0)));
+	Float t02 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0,  1.0)));
+	Float t12 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0,  1.0)));
+	Float t22 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0,  1.0)));
+
+#end
+	End
+	
+	Method filter_cel:Void(thick:Int,buf:DataBuffer)
+		If thick<1 Then Return
+		If thick>3 Then thick=3
+		thick=255-thick*64
+		
+		filter_gaussian(2,buf)
+		Local kx:Int[] = [-1, 0, 1, -2, 0, 2,-1, 0, 1]
+		Local ky:Int[] = [1, 2, 1, 0, 0, 0, -1, -2, -1]
+		
+		Local ix:DataBuffer = New DataBuffer(w*h*4)
+		filter_greyscale(buf,ix)
+
+		filter_bit(4,buf)
+		filter_stretch(buf)
+		
+		For Local i:Int = 1 Until h-1
+		For Local j:Int = 1 Until w-1
+			Local t00:Int = ix.PeekInt( ((j-1) + (i-1)*w) *4 ) & 255
+			Local t10:Int = ix.PeekInt( ((j-0) + (i-1)*w) *4 ) & 255
+			Local t20:Int = ix.PeekInt( ((j+1) + (i-1)*w) *4 ) & 255
+			Local t01:Int = ix.PeekInt( ((j-1) + (i-0)*w) *4 ) & 255
+			Local t21:Int = ix.PeekInt( ((j+1) + (i-0)*w) *4 ) & 255
+			Local t02:Int = ix.PeekInt( ((j-1) + (i+1)*w) *4 ) & 255
+			Local t12:Int = ix.PeekInt( ((j-0) + (i+1)*w) *4 ) & 255
+			Local t22:Int = ix.PeekInt( ((j+1) + (i+1)*w) *4 ) & 255
+
+			Local gradx:Float = t00 + 2.0 * t01 + t02 - t20 - 2.0 * t21 - t22;
+			Local grady:Float = t00 + 2.0 * t10 + t20 - t02 - 2.0 * t12 - t22;
+			Local l:Float = Sqrt(gradx*gradx + grady*grady)
+			
+			If l>thick Then buf.PokeInt (j + i*w) *4, $ff000000
+
+		Next
+		Next
+#rem				
+	Float t00 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0, -1.0)));
+	Float t10 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0, -1.0)));
+	Float t20 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0, -1.0)));
+	Float t01 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0,  0.0)));
+	Float t21 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0,  0.0)));
+	Float t02 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0,  1.0)));
+	Float t12 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0,  1.0)));
+	Float t22 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0,  1.0)));
+
+#end
+	End
+
+	Method filter_gaussian:Void(size:Int,buf:DataBuffer)
+		If size<1 Then Return
+		Local d:DataBuffer = New DataBuffer(w*h*4)
+
+		' meesy
+		' from here https://www.programming-techniques.com/2013/02/gaussian-filter-generation-using-cc.html
+		Local k:Float[(size*2+1)*(size*2+1)]
+		Local sigma:Float = 1.0
+   		Local o:Float = 2.0 * sigma * sigma
+   		Local sq:Float
+   				
+		Local sum:Float=0
+		For Local p:Int = -size To size
+		For Local q:Int = -size To size
+	        sq = Sqrt(p*p+q*q)
+	        k[p+size + (q+size)*(2*size+1)] = (Exp(-(sq * sq) / o)) / (PI * o)
+	        sum += k[p+size + (q+size)*(2*size+1)]
+		Next
+		Next
+		For Local p:Int = -size To size
+		For Local q:Int = -size To size
+	        k[p+size + (q+size)*(2*size+1)]/=sum
+		Next
+		Next
+				
+		For Local i:Int = size Until h-size
+		For Local j:Int = size Until w-size
+
+			Local r:Float=0
+			Local g:Float=0
+			Local b:Float=0
+			Local c:Int
+			
+			For Local p:Int = -size Until size
+			For Local q:Int = -size Until size
+				
+				c = buf.PeekInt( ((j+p) + ((i+q)*w))*4 )
+				r+= ((c Shr 16) & 255) * k[p+size + (q+size)*(2*size+1)]
+				g+= ((c Shr 8) & 255) * k[p+size + (q+size)*(2*size+1)]
+				b+= ((c Shr 0) & 255) * k[p+size + (q+size)*(2*size+1)]
+
+			Next
+			Next
+
+			d.PokeInt (j + i*w)*4, $ff000000 + (Int(r) Shl 16) + (Int(g) Shl 8) + (Int(b) Shl 0)
+		Next
+		Next
+		
+		For Local i:Int=0 Until buf.Length()
+			buf.PokeInt i,d.PeekInt(i)
+		Next
+	End
+	
+	Method filter_mean:Void(size:Int,buf:DataBuffer)
+		If size<1 Then Return
+		Local d:DataBuffer = New DataBuffer(w*h*4)
+		
+		For Local i:Int = size Until h-size
+		For Local j:Int = size Until w-size
+
+			Local r:Int=0
+			Local g:Int=0
+			Local b:Int=0
+			Local s:Int=0
+			Local c:Int
+			
+			For Local p:Int = -size To size
+			For Local q:Int = -size To size
+				
+				c = buf.PeekInt( ((j+p) + ((i+q)*w))*4 )
+				r+=((c Shr 16) & 255)
+				g+=((c Shr 8) & 255)
+				b+=((c Shr 0) & 255)
+				
+				s+=1
+			Next
+			Next
+
+			If s>0
+				r/=s
+				g/=s
+				b/=s
+				
+				d.PokeInt (j + i*w)*4, $ff000000 + (r Shl 16) + (g Shl 8) + (b Shl 0)
+			End
+		Next
+		Next
+		
+		For Local i:Int=0 Until buf.Length()
+			buf.PokeInt i,d.PeekInt(i)
+		Next
+	End
+	
+	Method filter_negative:Void(buf:DataBuffer)
+		' negative image
+		For Local i:Int = 0 Until buf.Length() Step 4
+			buf.PokeInt i,$ffffff - (buf.PeekInt(i) & $ffffff) + ($ff000000)
+		Next
+	End
+	
+	Method filter_greyscale:Void(src_buf:DataBuffer,dst_buf:DataBuffer)
+		For Local i:Int = 0 Until src_buf.Length() Step 4
+			Local col:Int = src_buf.PeekInt(i) & $ffffff
+'			Local g:Int = Int(((col Shr 16) & 255)*0.2126) Shl 16 + ((col Shr 8) & 255)*0.2126 + ((col Shr 0) & 255)*0.2126)/3
+			Local a:Int = Min(255,Int(((col Shr 16) & 255)*0.299) + Int(((col Shr 8) & 255)*0.587) + Int(((col Shr 0) & 255)*0.114) )
+			
+			dst_buf.PokeInt i,($ff000000) + a Shl 16 + a Shl 8 + a
+		Next
+	End
+
+	Method filter_bit:Void(bit:Int,buf:DataBuffer)
+		If bit<1 Then bit=1
+		Local c1:Int = 256/(Pow(2,bit-1))
+		Local c2:Int = c1/2
+		
+		For Local i:Int = 0 Until buf.Length() Step 4
+			Local col:Int = buf.PeekInt(i) & $ffffff
+			
+			Local r:Int = Min(255,Int((((col Shr 16) & 255)+c2)/c1)*c1)
+			Local g:Int = Min(255,Int((((col Shr 8) & 255)+c2)/c1)*c1)
+			Local b:Int = Min(255,Int((((col Shr 0) & 255)+c2)/c1)*c1)
+			
+			buf.PokeInt i,($ff000000) + (r Shl 16) + (g Shl 8) + b
+		Next
+	End
+	
+	Method filter_saturate:Void(s:Float,buf:DataBuffer)
+		Local c:Color = New Color()
+		
+		For Local i:Int=0 Until buf.Length() Step 4
+			c.Set(buf.PeekInt(i))
+			c.sat(Max(0.0,Min(1.0,c.sat + s)))
+			buf.PokeInt i,c.GetHex() + $ff000000
+		Next
+	End
+	
+	Method filter_stretch:Void(buf:DataBuffer)
+		Local c:Color = New Color()
+		
+		Local contrast:Float[] = filter_min_max_contrast(buf)
+		
+		For Local i:Int=0 Until buf.Length() Step 4
+			c.Set(buf.PeekInt(i))
+			c.bri((c.bri-contrast[0])/contrast[2])
+			buf.PokeInt i,c.GetHex() + $ff000000
+		Next
+	End
+
+	Method abgr2argb:Int(abgr:Int)
+		Return (abgr & $ff000000) + ((abgr & $ff) Shl 16) + (abgr & $ff00) + ((abgr & $ff0000) Shr 16)
+	End
+	
+	Method filter_min_max_contrast:Float[](buf:DataBuffer)
+		Local c:Color = New Color()
+		
+		Local minv:Float = 1.0
+		Local maxv:Float = 0.0
+	
+		For Local i:Int=0 Until buf.Length() Step 4
+			c.Set(buf.PeekInt(i))
+'			c.ToHsb()
+			If c.bri < minv Then minv = c.bri
+			If c.bri > maxv Then maxv = c.bri
+		Next
+			
+		Return [minv,maxv,maxv-minv]	
+	End
+		
+	Method GetImage:Image()
+		If change=True
+			If img Then img.Discard()
+			img = New Image(w,h,ox,oy)
+			img.WritePixels(0,0,w,h,db,0,0)
+		End
+		
+		change=False
+		
+		Return img
+	End
+End

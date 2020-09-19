@@ -1,0 +1,49 @@
+Strict
+Import mojo2
+Import imagefilter
+
+Class myClass Extends App
+	Field imgf:ImageFilter
+	Field img:Image
+	
+	Field cnvs:Canvas
+	
+    Method OnCreate:Int()
+        SetUpdateRate(60)				
+        cnvs = New Canvas
+        
+        img = Image.Load("dales.jpg",0,0)
+        
+        imgf = New ImageFilter(img)
+		imgf.ApplyFilter(ImageFilter.GREYSCALE)
+'		imgf.CreateSnapshot()
+'		imgf.ApplyFilter(ImageFilter.SATURATE,0.2)
+'		imgf.ApplyFilter(ImageFilter.STRETCH)
+'		imgf.ApplyFilter(ImageFilter.BIT,2)
+'		imgf.ApplyFilter(ImageFilter.MEAN,2)
+'		imgf.ApplyFilter(ImageFilter.GAUSSIAN,5)
+'		imgf.ApplyFilter(ImageFilter.EDGE,2)
+		imgf.ApplyFilter(ImageFilter.CEL,2,ImageFilter.SNAPSHOT)
+               
+        Return 0
+    End
+    
+    Method OnUpdate:Int()
+    	If KeyHit(KEY_SPACE) Then imgf.RevertSnapshot()
+        Return 0
+    End
+    
+    Method OnRender:Int()
+        cnvs.Clear (0,0.5,0)	
+        cnvs.DrawImage imgf.GetImage(),0,0
+        cnvs.Flush
+
+        Return 0
+    End
+End
+
+Function Main:Int()
+	' Create an instance of your class that you have defined above.
+    New myClass		
+    Return 0
+End
