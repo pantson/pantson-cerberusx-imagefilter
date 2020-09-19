@@ -4,15 +4,17 @@ Import brl.databuffer
 Import mojo.color
 
 Class ImageFilter
+Private
 	Field db:DataBuffer
 	Field w:Int,h:Int
 	Field ox:Float,oy:Float
 
 	Field img:Image
 	Field change:Bool
-	
+
 	Field snap:DataBuffer
-	
+
+Public
 	Const NEGATIVE:=0
 	Const GREYSCALE:=1
 	Const STRETCH:=2
@@ -24,31 +26,31 @@ Class ImageFilter
 	Const CEL:=8
 	Const REDUCE:=9
 	Const BRIGHTNESS:=10
-		
+
 	Const STACK:=0
 	Const SNAPSHOT:=1
-	
+
 	Method SetImage:Void(img:Image)
 		w = img.Width
 		h = img.Height
 		ox = img.HandleX()
 		oy = img.HandleY()
-		
+
 		If db Then db=Null
 		db = New DataBuffer(w * h * 4)
-		
+
 		Local i:Image = New Image(w,h)
 		Local cnvs:Canvas = New Canvas(i)
 		cnvs.DrawImage img,0,0
 		cnvs.Flush()
 		cnvs.ReadPixels(0,0,w,h,db,0,0)
-		
+
 		For Local i:Int = 0 Until db.Length() Step 4
 			db.PokeInt i,abgr2argb(DrawList.PremultiplyArgb2Abgr(db.PeekInt(i))) & $ffffff + $ff000000
 		End
-		
+
 		CreateSnapshot()
-		
+
 		i.Discard()
 	End
 
@@ -58,7 +60,7 @@ Class ImageFilter
 		Next
 		change=True
 	End
-		
+
 	Method CreateSnapshot:Void()
 		If snap Then snap=Null
 		snap = New DataBuffer(db.Length())
@@ -66,7 +68,7 @@ Class ImageFilter
 			snap.PokeInt i,db.PeekInt(i)
 		Next
 	End
-	
+
 	Method New(img:Image)
 		SetImage(img)
 	End
@@ -75,7 +77,7 @@ Class ImageFilter
 		For Local i:Int = 0 Until db.Length()
 			Local back:Int = db.PeekInt(i)
 			Local fore:Int = snap.PeekInt(i)
-			
+
 			Local a:Int = (fore Shr 24) & 255
 			If a = 255
 				db.PokeInt i,fore
@@ -88,11 +90,11 @@ Class ImageFilter
 					Local r2:Int = (fore Shr 16) & 255
 					Local g2:Int = (fore Shr 8) & 255
 					Local b2:Int = (fore Shr 0) & 255
-					
+
 					Local r:Int = r1 + ((r2-r1)*a)/255
 					Local g:Int = g1 + ((g2-g1)*a)/255
 					Local b:Int = b1 + ((b2-b1)*a)/255
-					
+
 					db.PokeInt i,$ff000000 + (r Shl 16) + (g Shl 8) + (b Shl 0)
 				End
 			End
@@ -100,7 +102,7 @@ Class ImageFilter
 
 		change=True
 	End
-		
+
 	Method ApplyFilter:Void(effect:Int)
 		ApplyFilter(effect,0,STACK)
 	End
@@ -108,7 +110,7 @@ Class ImageFilter
 	Method ApplyFilter:Void(effect:Int,v:Float)
 		ApplyFilter(effect,v,STACK)
 	End
-	
+
 	Method ApplyFilter:Void(effect:Int,v:Float,buffer:Int)
 		Local buf:DataBuffer
 
@@ -118,10 +120,23 @@ Class ImageFilter
 		Default
 			buf = db
 		End
-		
+
 		applyfilter(effect,v,buf)
 	End
-	
+
+	Method GetImage:Image()
+		If change=True
+			If img Then img.Discard()
+			img = New Image(w,h,ox,oy)
+			img.WritePixels(0,0,w,h,db,0,0)
+		End
+
+		change=False
+
+		Return img
+	End
+
+Private
 	Method applyfilter:Void(effect:Int,v:Float,buf:DataBuffer)
 		Select effect
 		Case NEGATIVE
@@ -147,23 +162,23 @@ Class ImageFilter
 		Case BRIGHTNESS
 			filter_brightness(v,buf)
 		End
-		
+
 		change=True
 	End
-	
+
 	' edge maths from here https://www.shadertoy.com/view/4slSzl
 	Method filter_edge:Void(thick:Int,buf:DataBuffer)
 		If thick<1 Then Return
 		If thick>3 Then thick=3
 		thick=255-thick*64
-		
+
 		filter_gaussian(2,buf)
 		Local kx:Int[] = [-1, 0, 1, -2, 0, 2,-1, 0, 1]
 		Local ky:Int[] = [1, 2, 1, 0, 0, 0, -1, -2, -1]
-		
+
 		Local ix:DataBuffer = New DataBuffer(w*h*4)
 		filter_greyscale(buf,ix)
-		
+
 		For Local i:Int = 1 Until h-1
 		For Local j:Int = 1 Until w-1
 			Local p00:Int = ix.PeekInt( ((j-1) + (i-1)*w) *4 ) & 255
@@ -178,7 +193,7 @@ Class ImageFilter
 			Local gx:Int = p00 + 2*p01 + p02 - p20 - 2*p21 - p22;
 			Local gy:Int = p00 + 2*p10 + p20 - p02 - 2*p12 - p22;
 			Local l:Float = Sqrt(gx*gx + gy*gy)
-			
+
 			If l>thick
 '				Local pen:Int = ((l-thick)/Float(thick) * 255.0) Shl 24
 				buf.PokeInt (j + i*w) *4, $ff000000
@@ -189,22 +204,22 @@ Class ImageFilter
 		Next
 		Next
 	End
-	
+
 	Method filter_cel:Void(thick:Int,buf:DataBuffer)
 		If thick<1 Then Return
 		If thick>3 Then thick=3
 		thick=255-thick*64
-		
+
 		filter_gaussian(2,buf)
 		Local kx:Int[] = [-1, 0, 1, -2, 0, 2,-1, 0, 1]
 		Local ky:Int[] = [1, 2, 1, 0, 0, 0, -1, -2, -1]
-		
+
 		Local ix:DataBuffer = New DataBuffer(w*h*4)
 		filter_greyscale(buf,ix)
 
 		filter_bit(4,buf)
 		filter_stretch(buf)
-		
+
 		For Local i:Int = 1 Until h-1
 		For Local j:Int = 1 Until w-1
 			Local t00:Int = ix.PeekInt( ((j-1) + (i-1)*w) *4 ) & 255
@@ -219,12 +234,12 @@ Class ImageFilter
 			Local gradx:Float = t00 + 2.0 * t01 + t02 - t20 - 2.0 * t21 - t22;
 			Local grady:Float = t00 + 2.0 * t10 + t20 - t02 - 2.0 * t12 - t22;
 			Local l:Float = Sqrt(gradx*gradx + grady*grady)
-			
+
 			If l>thick Then buf.PokeInt (j + i*w) *4, $ff000000
 
 		Next
 		Next
-#rem				
+#rem
 	Float t00 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0, -1.0)));
 	Float t10 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0, -1.0)));
 	Float t20 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0, -1.0)));
@@ -247,21 +262,21 @@ Class ImageFilter
 		Local sigma:Float = 1.0
    		Local o:Float = 2.0 * sigma * sigma
    		Local sq:Float
-   				
+   
 		Local sum:Float=0
 		For Local p:Int = -size To size
 		For Local q:Int = -size To size
-	        sq = Sqrt(p*p+q*q)
-	        k[p+size + (q+size)*(2*size+1)] = (Exp(-(sq * sq) / o)) / (PI * o)
-	        sum += k[p+size + (q+size)*(2*size+1)]
+			sq = Sqrt(p*p+q*q)
+			k[p+size + (q+size)*(2*size+1)] = (Exp(-(sq * sq) / o)) / (PI * o)
+			sum += k[p+size + (q+size)*(2*size+1)]
 		Next
 		Next
 		For Local p:Int = -size To size
 		For Local q:Int = -size To size
-	        k[p+size + (q+size)*(2*size+1)]/=sum
+			k[p+size + (q+size)*(2*size+1)]/=sum
 		Next
 		Next
-				
+
 		For Local i:Int = size Until h-size
 		For Local j:Int = size Until w-size
 
@@ -269,10 +284,10 @@ Class ImageFilter
 			Local g:Float=0
 			Local b:Float=0
 			Local c:Int
-			
+
 			For Local p:Int = -size Until size
 			For Local q:Int = -size Until size
-				
+
 				c = buf.PeekInt( ((j+p) + ((i+q)*w))*4 )
 				r+= ((c Shr 16) & 255) * k[p+size + (q+size)*(2*size+1)]
 				g+= ((c Shr 8) & 255) * k[p+size + (q+size)*(2*size+1)]
@@ -284,16 +299,16 @@ Class ImageFilter
 			d.PokeInt (j + i*w)*4, $ff000000 + (Int(r) Shl 16) + (Int(g) Shl 8) + (Int(b) Shl 0)
 		Next
 		Next
-		
+
 		For Local i:Int=0 Until buf.Length()
 			buf.PokeInt i,d.PeekInt(i)
 		Next
 	End
-	
+
 	Method filter_mean:Void(size:Int,buf:DataBuffer)
 		If size<1 Then Return
 		Local d:DataBuffer = New DataBuffer(w*h*4)
-		
+
 		For Local i:Int = size Until h-size
 		For Local j:Int = size Until w-size
 
@@ -302,15 +317,15 @@ Class ImageFilter
 			Local b:Int=0
 			Local s:Int=0
 			Local c:Int
-			
+
 			For Local p:Int = -size To size
 			For Local q:Int = -size To size
-				
+
 				c = buf.PeekInt( ((j+p) + ((i+q)*w))*4 )
 				r+=((c Shr 16) & 255)
 				g+=((c Shr 8) & 255)
 				b+=((c Shr 0) & 255)
-				
+
 				s+=1
 			Next
 			Next
@@ -319,30 +334,30 @@ Class ImageFilter
 				r/=s
 				g/=s
 				b/=s
-				
+
 				d.PokeInt (j + i*w)*4, $ff000000 + (r Shl 16) + (g Shl 8) + (b Shl 0)
 			End
 		Next
 		Next
-		
+
 		For Local i:Int=0 Until buf.Length()
 			buf.PokeInt i,d.PeekInt(i)
 		Next
 	End
-	
+
 	Method filter_negative:Void(buf:DataBuffer)
 		' negative image
 		For Local i:Int = 0 Until buf.Length() Step 4
 			buf.PokeInt i,$ffffff - (buf.PeekInt(i) & $ffffff) + ($ff000000)
 		Next
 	End
-	
+
 	Method filter_greyscale:Void(src_buf:DataBuffer,dst_buf:DataBuffer)
 		For Local i:Int = 0 Until src_buf.Length() Step 4
 			Local col:Int = src_buf.PeekInt(i) & $ffffff
 '			Local g:Int = Int(((col Shr 16) & 255)*0.2126) Shl 16 + ((col Shr 8) & 255)*0.2126 + ((col Shr 0) & 255)*0.2126)/3
 			Local a:Int = Min(255,Int(((col Shr 16) & 255)*0.299) + Int(((col Shr 8) & 255)*0.587) + Int(((col Shr 0) & 255)*0.114) )
-			
+
 			dst_buf.PokeInt i,($ff000000) + a Shl 16 + a Shl 8 + a
 		Next
 	End
@@ -351,21 +366,21 @@ Class ImageFilter
 		If bit<1 Then bit=1
 		Local c1:Int = 256/(Pow(2,bit-1))
 		Local c2:Int = c1/2
-		
+
 		For Local i:Int = 0 Until buf.Length() Step 4
 			Local col:Int = buf.PeekInt(i) & $ffffff
-			
+
 			Local r:Int = Min(255,Int((((col Shr 16) & 255)+c2)/c1)*c1)
 			Local g:Int = Min(255,Int((((col Shr 8) & 255)+c2)/c1)*c1)
 			Local b:Int = Min(255,Int((((col Shr 0) & 255)+c2)/c1)*c1)
-			
+
 			buf.PokeInt i,($ff000000) + (r Shl 16) + (g Shl 8) + b
 		Next
 	End
-	
+
 	Method filter_saturate:Void(s:Float,buf:DataBuffer)
 		Local c:Color = New Color()
-		
+
 		For Local i:Int=0 Until buf.Length() Step 4
 			Local col:Int = buf.PeekInt(i)
 			c.Set(col)
@@ -373,10 +388,10 @@ Class ImageFilter
 			buf.PokeInt i,c.GetHex() + (col & $ff000000)
 		Next
 	End
-	
+
 	Method filter_brightness:Void(s:Float,buf:DataBuffer)
 		Local c:Color = New Color()
-		
+
 		For Local i:Int=0 Until buf.Length() Step 4
 			Local col:Int = buf.PeekInt(i)
 			c.Set(col)
@@ -387,9 +402,9 @@ Class ImageFilter
 
 	Method filter_stretch:Void(buf:DataBuffer)
 		Local c:Color = New Color()
-		
+
 		Local contrast:Float[] = filter_min_max_contrast(buf)
-		
+
 		For Local i:Int=0 Until buf.Length() Step 4
 			Local col:Int = buf.PeekInt(i)
 			c.Set(col)
@@ -401,34 +416,34 @@ Class ImageFilter
 	Method abgr2argb:Int(abgr:Int)
 		Return (abgr & $ff000000) + ((abgr & $ff) Shl 16) + (abgr & $ff00) + ((abgr & $ff0000) Shr 16)
 	End
-	
+
 	Method filter_min_max_contrast:Float[](buf:DataBuffer)
 		Local c:Color = New Color()
-		
+
 		Local minv:Float = 1.0
 		Local maxv:Float = 0.0
-	
+
 		For Local i:Int=0 Until buf.Length() Step 4
 			c.Set(buf.PeekInt(i))
 '			c.ToHsb()
 			If c.bri < minv Then minv = c.bri
 			If c.bri > maxv Then maxv = c.bri
 		Next
-			
-		Return [minv,maxv,maxv-minv]	
+
+		Return [minv,maxv,maxv-minv]
 	End
-		
+
 	Method filter_reduce_colours:Void(n:Int,buf:DataBuffer)
 		filter_reduce_colours(n,buf,0,0,w,h)
 	End
-	
+
 	Method filter_reduce_colours:Void(n:Int,buf:DataBuffer,x:Int,y:Int,w:Int,h:Int)
 		Local a:Int, r:Int, g:Int, b:Int, c:Int
 		Local p:Int,q:Int
 		Local tmp:Int[]
 		Local new_pal:Int[n]
 		Local detail:Int=Max(1,w/30)
-		
+
 		' copy every other colour to new buffer
 		tmp = tmp.Resize(Int(w/detail +1)*Int(h/detail +1))
 		a=0
@@ -449,7 +464,7 @@ Class ImageFilter
 			q=0
 			len=len/2
 			p=0
-	
+
 			While q<depth
 				range(tmp,p,p+len)
 				p+=len
@@ -457,31 +472,31 @@ Class ImageFilter
 			Wend
 			depth*=2
 		Wend
-				
+
 		' get colours
 		q = 0
 		While q<len*n
-			
+
 			r = 0
 			g = 0
 			b = 0
-			
+
 			i = 0
 			While i < len
 				r = r + ((tmp[i+q] Shr 16) & 255)
 				g = g + ((tmp[i+q] Shr 8) & 255)
 				b = b + ((tmp[i+q] Shr 0) & 255)
-				
+
 				i = i + 1
 			Wend 
 			r = r / len
 			g = g / len
 			b = b / len
-			
+
 			new_pal[q/len] = $ff000000 + (r Shl 16) + (g Shl 8) + b
 			q+=len
 		Wend
-		
+
 		tmp = tmp.Resize(0) 
 		'Return new_pal
 
@@ -490,10 +505,10 @@ Class ImageFilter
 			g = (r Shr 8) & 255
 			b = (r Shr 0) & 255
 			r = (r Shr 16) & 255
-			
+
 			Local bestdiff:Int = 999999
 			Local diff:Int =0 
-						
+
 			Local c:Int = 0
 			For Local p:Int = 0 Until n
 				diff = Abs(((new_pal[p] Shr 16) & 255) - r)
@@ -505,7 +520,7 @@ Class ImageFilter
 					'Print diff
 				End
 			Next
-						
+
 			buf.PokeInt(i,new_pal[c])
 		Next
 	End
@@ -515,7 +530,7 @@ Class ImageFilter
 		Local rl:Int, gl:Int, bl:Int
 		Local ru:Int, gu:Int, bu:Int
 		Local i:Int',j:Int
-		
+
 		ru=0
 		gu=0
 		bu=0
@@ -544,7 +559,7 @@ Class ImageFilter
 			Else
 				' sort blue
 				sort(tmp,start,finish,%11111111)
-			End				
+			End
 		Else
 			If gu-gl > bu-bl
 				' sort green
@@ -552,14 +567,14 @@ Class ImageFilter
 			Else
 				' sort blue
 				sort(tmp,start,finish,%11111111)
-			End				
-		End			
+			End
+		End
 	End
-	
+
 	Method sort:Void(tmp:Int[],start:Int,finish:Int,mask:Int)
 		Local i:Int,j:Int
 		Local t:Int
-		
+
 		' basic bubble sort based on mask
 		j = start
 		While j<finish
@@ -574,17 +589,5 @@ Class ImageFilter
 			Wend
 			j=j+1
 		Wend
-	End
-	
-	Method GetImage:Image()
-		If change=True
-			If img Then img.Discard()
-			img = New Image(w,h,ox,oy)
-			img.WritePixels(0,0,w,h,db,0,0)
-		End
-		
-		change=False
-		
-		Return img
 	End
 End

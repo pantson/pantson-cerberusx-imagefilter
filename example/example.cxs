@@ -8,24 +8,24 @@ Import imagefilter
 Class myClass Extends App
 	Field imgf:ImageFilter
 	Field img:Image
-	
+
 	Field cnvs:Canvas
-	
-    Method OnCreate:Int()
-        SetUpdateRate(60)				
-        cnvs = New Canvas
-        
-        img = Image.Load("7.jpg",0,0)
-        
-        imgf = New ImageFilter(img)
-        ' remove noise
-		imgf.ApplyFilter(ImageFilter.GAUSSIAN,5)
+
+	Method OnCreate:Int()
+		SetUpdateRate(60)
+		cnvs = New Canvas
+
+		img = Image.Load("dales.jpg",0,0)
+
+		imgf = New ImageFilter(img)
+		' remove noise
+'		imgf.ApplyFilter(ImageFilter.GAUSSIAN,5)
 		' store copy in snapshot
 		imgf.CreateSnapshot()
 		' create an edge in the snapshot
 		imgf.ApplyFilter(ImageFilter.EDGE,2,ImageFilter.SNAPSHOT)
 '		imgf.ApplyFilter(ImageFilter.BRIGHTNESS,0.5,ImageFilter.SNAPSHOT)
-		
+
 		' apply colour bit depth 
 		imgf.ApplyFilter(ImageFilter.SATURATE,0.2)
 '		imgf.ApplyFilter(ImageFilter.BRIGHTNESS,0.5)
@@ -35,31 +35,31 @@ Class myClass Extends App
 		imgf.DrawSnapshot()
 
 '		imgf.ApplyFilter(ImageFilter.REDUCE,16)
-				
+
 '		imgf.ApplyFilter(ImageFilter.GREYSCALE)
 '		imgf.ApplyFilter(ImageFilter.STRETCH)
 '		imgf.ApplyFilter(ImageFilter.MEAN,2)
 '		imgf.ApplyFilter(ImageFilter.CEL,2,ImageFilter.SNAPSHOT)
-               
-        Return 0
-    End
-    
-    Method OnUpdate:Int()
-    	If KeyHit(KEY_SPACE) Then imgf.RevertSnapshot()
-        Return 0
-    End
-    
-    Method OnRender:Int()
-        cnvs.Clear (0,0.5,0)	
-        cnvs.DrawImage imgf.GetImage(),0,0
-        cnvs.Flush
+			   
+		Return 0
+	End
 
-        Return 0
-    End
+	Method OnUpdate:Int()
+		If KeyHit(KEY_SPACE) Then imgf.RevertSnapshot()
+		Return 0
+	End
+
+	Method OnRender:Int()
+		cnvs.Clear (0,0.5,0)
+		cnvs.DrawImage imgf.GetImage(),0,0
+		cnvs.Flush
+
+		Return 0
+	End
 End
 
 Function Main:Int()
 	' Create an instance of your class that you have defined above.
-    New myClass		
-    Return 0
+	New myClass
+	Return 0
 End
