@@ -23,7 +23,8 @@ Class ImageFilter
 	Const EDGE:=7
 	Const CEL:=8
 	Const REDUCE:=9
-
+	Const BRIGHTNESS:=10
+		
 	Const STACK:=0
 	Const SNAPSHOT:=1
 	
@@ -43,7 +44,7 @@ Class ImageFilter
 		cnvs.ReadPixels(0,0,w,h,db,0,0)
 		
 		For Local i:Int = 0 Until db.Length() Step 4
-			db.PokeInt i,abgr2argb(DrawList.PremultiplyArgb2Abgr(db.PeekInt(i)))
+			db.PokeInt i,abgr2argb(DrawList.PremultiplyArgb2Abgr(db.PeekInt(i))) & $ffffff + $ff000000
 		End
 		
 		CreateSnapshot()
@@ -143,6 +144,8 @@ Class ImageFilter
 			filter_cel(Int(v),buf)
 		Case REDUCE
 			filter_reduce_colours(Int(v),buf)
+		Case BRIGHTNESS
+			filter_brightness(v,buf)
 		End
 		
 		change=True
@@ -163,21 +166,21 @@ Class ImageFilter
 		
 		For Local i:Int = 1 Until h-1
 		For Local j:Int = 1 Until w-1
-			Local t00:Int = ix.PeekInt( ((j-1) + (i-1)*w) *4 ) & 255
-			Local t10:Int = ix.PeekInt( ((j-0) + (i-1)*w) *4 ) & 255
-			Local t20:Int = ix.PeekInt( ((j+1) + (i-1)*w) *4 ) & 255
-			Local t01:Int = ix.PeekInt( ((j-1) + (i-0)*w) *4 ) & 255
-			Local t21:Int = ix.PeekInt( ((j+1) + (i-0)*w) *4 ) & 255
-			Local t02:Int = ix.PeekInt( ((j-1) + (i+1)*w) *4 ) & 255
-			Local t12:Int = ix.PeekInt( ((j-0) + (i+1)*w) *4 ) & 255
-			Local t22:Int = ix.PeekInt( ((j+1) + (i+1)*w) *4 ) & 255
+			Local p00:Int = ix.PeekInt( ((j-1) + (i-1)*w) *4 ) & 255
+			Local p10:Int = ix.PeekInt( ((j-0) + (i-1)*w) *4 ) & 255
+			Local p20:Int = ix.PeekInt( ((j+1) + (i-1)*w) *4 ) & 255
+			Local p01:Int = ix.PeekInt( ((j-1) + (i-0)*w) *4 ) & 255
+			Local p21:Int = ix.PeekInt( ((j+1) + (i-0)*w) *4 ) & 255
+			Local p02:Int = ix.PeekInt( ((j-1) + (i+1)*w) *4 ) & 255
+			Local p12:Int = ix.PeekInt( ((j-0) + (i+1)*w) *4 ) & 255
+			Local p22:Int = ix.PeekInt( ((j+1) + (i+1)*w) *4 ) & 255
 
-			Local gradx:Float = t00 + 2.0 * t01 + t02 - t20 - 2.0 * t21 - t22;
-			Local grady:Float = t00 + 2.0 * t10 + t20 - t02 - 2.0 * t12 - t22;
-			Local l:Float = Sqrt(gradx*gradx + grady*grady)
+			Local gx:Int = p00 + 2*p01 + p02 - p20 - 2*p21 - p22;
+			Local gy:Int = p00 + 2*p10 + p20 - p02 - 2*p12 - p22;
+			Local l:Float = Sqrt(gx*gx + gy*gy)
 			
 			If l>thick
-				Local pen:Int = ((l-thick)/Float(thick) * 255.0) Shl 24
+'				Local pen:Int = ((l-thick)/Float(thick) * 255.0) Shl 24
 				buf.PokeInt (j + i*w) *4, $ff000000
 			Else
 				buf.PokeInt (j + i*w) *4,$00000000
@@ -185,17 +188,6 @@ Class ImageFilter
 
 		Next
 		Next
-#rem				
-	Float t00 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0, -1.0)));
-	Float t10 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0, -1.0)));
-	Float t20 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0, -1.0)));
-	Float t01 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0,  0.0)));
-	Float t21 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0,  0.0)));
-	Float t02 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0,  1.0)));
-	Float t12 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0,  1.0)));
-	Float t22 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0,  1.0)));
-
-#end
 	End
 	
 	Method filter_cel:Void(thick:Int,buf:DataBuffer)
@@ -375,21 +367,34 @@ Class ImageFilter
 		Local c:Color = New Color()
 		
 		For Local i:Int=0 Until buf.Length() Step 4
-			c.Set(buf.PeekInt(i))
+			Local col:Int = buf.PeekInt(i)
+			c.Set(col)
 			c.sat(Max(0.0,Min(1.0,c.sat + s)))
-			buf.PokeInt i,c.GetHex() + $ff000000
+			buf.PokeInt i,c.GetHex() + (col & $ff000000)
 		Next
 	End
 	
+	Method filter_brightness:Void(s:Float,buf:DataBuffer)
+		Local c:Color = New Color()
+		
+		For Local i:Int=0 Until buf.Length() Step 4
+			Local col:Int = buf.PeekInt(i)
+			c.Set(col)
+			c.bri(Max(0.0,Min(1.0,c.bri + s)))
+			buf.PokeInt i,c.GetHex() + (col & $ff000000)
+		Next
+	End
+
 	Method filter_stretch:Void(buf:DataBuffer)
 		Local c:Color = New Color()
 		
 		Local contrast:Float[] = filter_min_max_contrast(buf)
 		
 		For Local i:Int=0 Until buf.Length() Step 4
-			c.Set(buf.PeekInt(i))
+			Local col:Int = buf.PeekInt(i)
+			c.Set(col)
 			c.bri((c.bri-contrast[0])/contrast[2])
-			buf.PokeInt i,c.GetHex() + $ff000000
+			buf.PokeInt i,c.GetHex() + (col & $ff000000)
 		Next
 	End
 
@@ -422,9 +427,8 @@ Class ImageFilter
 		Local p:Int,q:Int
 		Local tmp:Int[]
 		Local new_pal:Int[n]
-		Local detail:Int=16
+		Local detail:Int=Max(1,w/30)
 		
-	Print "hello"
 		' copy every other colour to new buffer
 		tmp = tmp.Resize(Int(w/detail +1)*Int(h/detail +1))
 		a=0
@@ -438,7 +442,7 @@ Class ImageFilter
 			Wend
 			i+=detail
 		Wend
-	Print "hello"
+
 		Local depth:Int=1
 		Local len:Int = tmp.Length()*2
 		While depth<n+1
@@ -453,7 +457,6 @@ Class ImageFilter
 			Wend
 			depth*=2
 		Wend
-	Print "hello"
 				
 		' get colours
 		q = 0
@@ -478,7 +481,6 @@ Class ImageFilter
 			new_pal[q/len] = $ff000000 + (r Shl 16) + (g Shl 8) + b
 			q+=len
 		Wend
-	Print "hello"
 		
 		tmp = tmp.Resize(0) 
 		'Return new_pal
@@ -534,7 +536,7 @@ Class ImageFilter
 			If b>bu Then bu=b
 			i=i+1
 		Wend
-Print "range"		
+
 		If ru-rl > gu-gl
 			If ru-rl > bu-bl
 				' sort red
@@ -552,17 +554,13 @@ Print "range"
 				sort(tmp,start,finish,%11111111)
 			End				
 		End			
-
-Print "range"		
 	End
 	
 	Method sort:Void(tmp:Int[],start:Int,finish:Int,mask:Int)
 		Local i:Int,j:Int
 		Local t:Int
 		
-		' bubble sort
-		Print start
-		Print finish
+		' basic bubble sort based on mask
 		j = start
 		While j<finish
 			i = finish-1
@@ -576,7 +574,6 @@ Print "range"
 			Wend
 			j=j+1
 		Wend
-Print "sort"
 	End
 	
 	Method GetImage:Image()
