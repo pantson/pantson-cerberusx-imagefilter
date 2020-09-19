@@ -21,25 +21,18 @@ Class myClass Extends App
 		' remove noise
 '		imgf.ApplyFilter(ImageFilter.GAUSSIAN,5)
 		' store copy in snapshot
-		imgf.CreateSnapshot()
+'		imgf.CreateSnapshot()
 		' create an edge in the snapshot
-		imgf.ApplyFilter(ImageFilter.EDGE,2,ImageFilter.SNAPSHOT)
-'		imgf.ApplyFilter(ImageFilter.BRIGHTNESS,0.5,ImageFilter.SNAPSHOT)
+'		imgf.ApplyFilter(ImageFilter.EDGE,2,ImageFilter.SNAPSHOT)
 
 		' apply colour bit depth 
-		imgf.ApplyFilter(ImageFilter.SATURATE,0.2)
-'		imgf.ApplyFilter(ImageFilter.BRIGHTNESS,0.5)
-		imgf.ApplyFilter(ImageFilter.REDUCE,32)
-'		imgf.ApplyFilter(ImageFilter.BIT,3)
+'		imgf.ApplyFilter(ImageFilter.SATURATE,0.2)
+'		imgf.ApplyFilter(ImageFilter.REDUCE,32)
 		' draw line edges on top
-		imgf.DrawSnapshot()
+'		imgf.DrawSnapshot()
 
-'		imgf.ApplyFilter(ImageFilter.REDUCE,16)
-
-'		imgf.ApplyFilter(ImageFilter.GREYSCALE)
-'		imgf.ApplyFilter(ImageFilter.STRETCH)
-'		imgf.ApplyFilter(ImageFilter.MEAN,2)
-'		imgf.ApplyFilter(ImageFilter.CEL,2,ImageFilter.SNAPSHOT)
+'		imgf.SetImage(img)
+		imgf.ApplyFilter(ImageFilter.CEL,2)
 			   
 		Return 0
 	End

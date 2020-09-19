@@ -154,7 +154,7 @@ Private
 		Case GAUSSIAN
 			filter_gaussian(Int(v),buf)
 		Case EDGE
-			filter_edge(Int(v),buf)
+			filter_edge(Int(v),buf,buf)
 		Case CEL
 			filter_cel(Int(v),buf)
 		Case REDUCE
@@ -167,17 +167,17 @@ Private
 	End
 
 	' edge maths from here https://www.shadertoy.com/view/4slSzl
-	Method filter_edge:Void(thick:Int,buf:DataBuffer)
+	Method filter_edge:Void(thick:Int,src_buf:DataBuffer,dst_buf:DataBuffer)
 		If thick<1 Then Return
 		If thick>3 Then thick=3
 		thick=255-thick*64
 
-		filter_gaussian(2,buf)
+		filter_gaussian(2,src_buf)
 		Local kx:Int[] = [-1, 0, 1, -2, 0, 2,-1, 0, 1]
 		Local ky:Int[] = [1, 2, 1, 0, 0, 0, -1, -2, -1]
 
-		Local ix:DataBuffer = New DataBuffer(w*h*4)
-		filter_greyscale(buf,ix)
+		Local ix:DataBuffer = New DataBuffer(src_buf.Length())
+		filter_greyscale(src_buf,ix)
 
 		For Local i:Int = 1 Until h-1
 		For Local j:Int = 1 Until w-1
@@ -196,9 +196,9 @@ Private
 
 			If l>thick
 '				Local pen:Int = ((l-thick)/Float(thick) * 255.0) Shl 24
-				buf.PokeInt (j + i*w) *4, $ff000000
+				dst_buf.PokeInt (j + i*w) *4,$ff000000
 			Else
-				buf.PokeInt (j + i*w) *4,$00000000
+'				dst_buf.PokeInt (j + i*w) *4,$00000000
 			End
 
 		Next
@@ -208,48 +208,26 @@ Private
 	Method filter_cel:Void(thick:Int,buf:DataBuffer)
 		If thick<1 Then Return
 		If thick>3 Then thick=3
-		thick=255-thick*64
 
-		filter_gaussian(2,buf)
-		Local kx:Int[] = [-1, 0, 1, -2, 0, 2,-1, 0, 1]
-		Local ky:Int[] = [1, 2, 1, 0, 0, 0, -1, -2, -1]
 
-		Local ix:DataBuffer = New DataBuffer(w*h*4)
-		filter_greyscale(buf,ix)
+		' copy to tmp buffer for edging 
+		Local ix:DataBuffer = New DataBuffer(db.Length())
+		For Local i:Int=0 Until buf.Length() Step 4
+			ix.PokeInt i,buf.PeekInt(i)
+		Next
 
-		filter_bit(4,buf)
+'		filter_saturate(0.2,buf)
+		
+		' reduce noise
+		filter_gaussian(5,buf)
 		filter_stretch(buf)
-
-		For Local i:Int = 1 Until h-1
-		For Local j:Int = 1 Until w-1
-			Local t00:Int = ix.PeekInt( ((j-1) + (i-1)*w) *4 ) & 255
-			Local t10:Int = ix.PeekInt( ((j-0) + (i-1)*w) *4 ) & 255
-			Local t20:Int = ix.PeekInt( ((j+1) + (i-1)*w) *4 ) & 255
-			Local t01:Int = ix.PeekInt( ((j-1) + (i-0)*w) *4 ) & 255
-			Local t21:Int = ix.PeekInt( ((j+1) + (i-0)*w) *4 ) & 255
-			Local t02:Int = ix.PeekInt( ((j-1) + (i+1)*w) *4 ) & 255
-			Local t12:Int = ix.PeekInt( ((j-0) + (i+1)*w) *4 ) & 255
-			Local t22:Int = ix.PeekInt( ((j+1) + (i+1)*w) *4 ) & 255
-
-			Local gradx:Float = t00 + 2.0 * t01 + t02 - t20 - 2.0 * t21 - t22;
-			Local grady:Float = t00 + 2.0 * t10 + t20 - t02 - 2.0 * t12 - t22;
-			Local l:Float = Sqrt(gradx*gradx + grady*grady)
-
-			If l>thick Then buf.PokeInt (j + i*w) *4, $ff000000
-
-		Next
-		Next
-#rem
-	Float t00 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0, -1.0)));
-	Float t10 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0, -1.0)));
-	Float t20 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0, -1.0)));
-	Float t01 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0,  0.0)));
-	Float t21 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0,  0.0)));
-	Float t02 = lum(texture(iChannel0, p + imageIncrement * vec2(-1.0,  1.0)));
-	Float t12 = lum(texture(iChannel0, p + imageIncrement * vec2( 0.0,  1.0)));
-	Float t22 = lum(texture(iChannel0, p + imageIncrement * vec2( 1.0,  1.0)));
-
-#end
+		
+		' reduce colours in pic
+'		filter_reduce_colours(32,buf)
+		filter_bit(3,buf)
+		
+		' draw lines
+		filter_edge(thick,ix,buf)
 	End
 
 	Method filter_gaussian:Void(size:Int,buf:DataBuffer)
