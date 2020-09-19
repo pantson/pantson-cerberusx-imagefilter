@@ -22,7 +22,8 @@ Class ImageFilter
 	Const GAUSSIAN:=6
 	Const EDGE:=7
 	Const CEL:=8
-	
+	Const REDUCE:=9
+
 	Const STACK:=0
 	Const SNAPSHOT:=1
 	
@@ -68,7 +69,37 @@ Class ImageFilter
 	Method New(img:Image)
 		SetImage(img)
 	End
-	
+
+	Method DrawSnapshot:Void()
+		For Local i:Int = 0 Until db.Length()
+			Local back:Int = db.PeekInt(i)
+			Local fore:Int = snap.PeekInt(i)
+			
+			Local a:Int = (fore Shr 24) & 255
+			If a = 255
+				db.PokeInt i,fore
+'				Print i
+			Else
+				If a>0
+					Local r1:Int = (back Shr 16) & 255
+					Local g1:Int = (back Shr 8) & 255
+					Local b1:Int = (back Shr 0) & 255
+					Local r2:Int = (fore Shr 16) & 255
+					Local g2:Int = (fore Shr 8) & 255
+					Local b2:Int = (fore Shr 0) & 255
+					
+					Local r:Int = r1 + ((r2-r1)*a)/255
+					Local g:Int = g1 + ((g2-g1)*a)/255
+					Local b:Int = b1 + ((b2-b1)*a)/255
+					
+					db.PokeInt i,$ff000000 + (r Shl 16) + (g Shl 8) + (b Shl 0)
+				End
+			End
+		Next
+
+		change=True
+	End
+		
 	Method ApplyFilter:Void(effect:Int)
 		ApplyFilter(effect,0,STACK)
 	End
@@ -86,7 +117,11 @@ Class ImageFilter
 		Default
 			buf = db
 		End
-
+		
+		applyfilter(effect,v,buf)
+	End
+	
+	Method applyfilter:Void(effect:Int,v:Float,buf:DataBuffer)
 		Select effect
 		Case NEGATIVE
 			filter_negative(buf)
@@ -106,6 +141,8 @@ Class ImageFilter
 			filter_edge(Int(v),buf)
 		Case CEL
 			filter_cel(Int(v),buf)
+		Case REDUCE
+			filter_reduce_colours(Int(v),buf)
 		End
 		
 		change=True
@@ -141,7 +178,7 @@ Class ImageFilter
 			
 			If l>thick
 				Local pen:Int = ((l-thick)/Float(thick) * 255.0) Shl 24
-				buf.PokeInt (j + i*w) *4, pen + $000000
+				buf.PokeInt (j + i*w) *4, $ff000000
 			Else
 				buf.PokeInt (j + i*w) *4,$00000000
 			End
@@ -376,6 +413,172 @@ Class ImageFilter
 		Return [minv,maxv,maxv-minv]	
 	End
 		
+	Method filter_reduce_colours:Void(n:Int,buf:DataBuffer)
+		filter_reduce_colours(n,buf,0,0,w,h)
+	End
+	
+	Method filter_reduce_colours:Void(n:Int,buf:DataBuffer,x:Int,y:Int,w:Int,h:Int)
+		Local a:Int, r:Int, g:Int, b:Int, c:Int
+		Local p:Int,q:Int
+		Local tmp:Int[]
+		Local new_pal:Int[n]
+		Local detail:Int=16
+		
+	Print "hello"
+		' copy every other colour to new buffer
+		tmp = tmp.Resize(Int(w/detail +1)*Int(h/detail +1))
+		a=0
+		Local i:Int = x
+		While i < x+w
+			Local j :Int = y
+			While j < y+h
+				tmp[a] = buf.PeekInt( (i + j*w)*4 )
+				j+=detail
+				a+=1
+			Wend
+			i+=detail
+		Wend
+	Print "hello"
+		Local depth:Int=1
+		Local len:Int = tmp.Length()*2
+		While depth<n+1
+			q=0
+			len=len/2
+			p=0
+	
+			While q<depth
+				range(tmp,p,p+len)
+				p+=len
+				q+=1
+			Wend
+			depth*=2
+		Wend
+	Print "hello"
+				
+		' get colours
+		q = 0
+		While q<len*n
+			
+			r = 0
+			g = 0
+			b = 0
+			
+			i = 0
+			While i < len
+				r = r + ((tmp[i+q] Shr 16) & 255)
+				g = g + ((tmp[i+q] Shr 8) & 255)
+				b = b + ((tmp[i+q] Shr 0) & 255)
+				
+				i = i + 1
+			Wend 
+			r = r / len
+			g = g / len
+			b = b / len
+			
+			new_pal[q/len] = $ff000000 + (r Shl 16) + (g Shl 8) + b
+			q+=len
+		Wend
+	Print "hello"
+		
+		tmp = tmp.Resize(0) 
+		'Return new_pal
+
+		For Local i:Int=0 Until buf.Length() Step 4
+			r = buf.PeekInt(i)
+			g = (r Shr 8) & 255
+			b = (r Shr 0) & 255
+			r = (r Shr 16) & 255
+			
+			Local bestdiff:Int = 999999
+			Local diff:Int =0 
+						
+			Local c:Int = 0
+			For Local p:Int = 0 Until n
+				diff = Abs(((new_pal[p] Shr 16) & 255) - r)
+				diff = diff + Abs(((new_pal[p] Shr 8) & 255) - g)
+				diff = diff + Abs(((new_pal[p] Shr 0) & 255) - b)
+				If diff < bestdiff
+					c = p
+					bestdiff = diff
+					'Print diff
+				End
+			Next
+						
+			buf.PokeInt(i,new_pal[c])
+		Next
+	End
+
+	Method range:Void(tmp:Int[],start:Int,finish:Int)
+		Local r:Int, g:Int, b:Int
+		Local rl:Int, gl:Int, bl:Int
+		Local ru:Int, gu:Int, bu:Int
+		Local i:Int',j:Int
+		
+		ru=0
+		gu=0
+		bu=0
+		rl=255
+		gl=255
+		bl=255
+
+		i = start
+		While i<finish
+			r = (tmp[i] Shr 16) & 255
+			g = (tmp[i] Shr 8) & 255
+			b = (tmp[i] Shr 0) & 255
+			If r<rl Then rl=r
+			If r>ru Then ru=r
+			If g<gl Then gl=g
+			If g>gu Then gu=g
+			If b<bl Then bl=b
+			If b>bu Then bu=b
+			i=i+1
+		Wend
+Print "range"		
+		If ru-rl > gu-gl
+			If ru-rl > bu-bl
+				' sort red
+				sort(tmp,start,finish,%111111110000000000000000)
+			Else
+				' sort blue
+				sort(tmp,start,finish,%11111111)
+			End				
+		Else
+			If gu-gl > bu-bl
+				' sort green
+				sort(tmp,start,finish,%1111111100000000)
+			Else
+				' sort blue
+				sort(tmp,start,finish,%11111111)
+			End				
+		End			
+
+Print "range"		
+	End
+	
+	Method sort:Void(tmp:Int[],start:Int,finish:Int,mask:Int)
+		Local i:Int,j:Int
+		Local t:Int
+		
+		' bubble sort
+		Print start
+		Print finish
+		j = start
+		While j<finish
+			i = finish-1
+			While i>j
+				If (tmp[i] & mask)<(tmp[i-1] & mask)
+					t = tmp[i-1]
+					tmp[i-1] = tmp[i]
+					tmp[i] = t
+				End
+				i=i-1
+			Wend
+			j=j+1
+		Wend
+Print "sort"
+	End
+	
 	Method GetImage:Image()
 		If change=True
 			If img Then img.Discard()

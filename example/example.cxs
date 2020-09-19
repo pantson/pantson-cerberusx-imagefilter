@@ -2,6 +2,9 @@ Strict
 Import mojo2
 Import imagefilter
 
+#GLFW_WINDOW_WIDTH=800
+#GLFW_WINDOW_HEIGHT=640
+
 Class myClass Extends App
 	Field imgf:ImageFilter
 	Field img:Image
@@ -12,18 +15,28 @@ Class myClass Extends App
         SetUpdateRate(60)				
         cnvs = New Canvas
         
-        img = Image.Load("dales.jpg",0,0)
+        img = Image.Load("1.jpg",0,0)
         
         imgf = New ImageFilter(img)
-		imgf.ApplyFilter(ImageFilter.GREYSCALE)
-'		imgf.CreateSnapshot()
+        ' remove noise
+		imgf.ApplyFilter(ImageFilter.GAUSSIAN,5)
+		' store copy in snapshot
+		imgf.CreateSnapshot()
+		' create an edge in the snapshot
+		imgf.ApplyFilter(ImageFilter.EDGE,2,ImageFilter.SNAPSHOT)
+		' apply colour bit depth 
+		imgf.ApplyFilter(ImageFilter.REDUCE,32)
+'		imgf.ApplyFilter(ImageFilter.BIT,1)
+		' draw line edges on top
+		imgf.DrawSnapshot()
+
+'		imgf.ApplyFilter(ImageFilter.REDUCE,16)
+				
+'		imgf.ApplyFilter(ImageFilter.GREYSCALE)
 '		imgf.ApplyFilter(ImageFilter.SATURATE,0.2)
 '		imgf.ApplyFilter(ImageFilter.STRETCH)
-'		imgf.ApplyFilter(ImageFilter.BIT,2)
 '		imgf.ApplyFilter(ImageFilter.MEAN,2)
-'		imgf.ApplyFilter(ImageFilter.GAUSSIAN,5)
-'		imgf.ApplyFilter(ImageFilter.EDGE,2)
-		imgf.ApplyFilter(ImageFilter.CEL,2,ImageFilter.SNAPSHOT)
+'		imgf.ApplyFilter(ImageFilter.CEL,2,ImageFilter.SNAPSHOT)
                
         Return 0
     End
