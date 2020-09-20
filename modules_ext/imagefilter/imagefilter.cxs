@@ -158,7 +158,7 @@ Private
 		Case TOON
 			filter_toon(Int(v),buf)
 		Case REDUCE
-			filter_reduce_colours(Int(v),buf)
+			filter_recolour(filter_reduce_colours(Int(v),buf),buf)
 		Case BRIGHTNESS
 			filter_brightness(v,buf)
 		End
@@ -167,7 +167,7 @@ Private
 	End
 
 	' edge maths from here https://www.shadertoy.com/view/4slSzl
-	Method filter_edge:Void(thick:Int,src_buf:DataBuffer,dst_buf:DataBuffer)
+	Method filter_edge:Void(thick:Int,src_buf:DataBuffer,dst_buf:DataBuffer,draw_paper:Bool=True)
 		If thick<1 Then Return
 		If thick>3 Then thick=3
 		thick=255-thick*64
@@ -198,10 +198,23 @@ Private
 '				Local pen:Int = ((l-thick)/Float(thick) * 255.0) Shl 24
 				dst_buf.PokeInt (j + i*w) *4,$ff000000
 			Else
-'				dst_buf.PokeInt (j + i*w) *4,$00000000
+				If draw_paper Then dst_buf.PokeInt (j + i*w) *4,$00000000
 			End
 
 		Next
+		Next
+	End
+	
+	Method write:Void(src:DataBuffer,dst:DataBuffer)
+		For Local i:Int =0 Until src.Length()
+			Local scol:Int = src.PeekInt(i)
+			Local a:Int = (scol Shr 24) & 255
+			If a>0
+				If a=255
+					dst.PokeInt i,scol
+				Else
+				End
+			End
 		Next
 	End
 
@@ -216,7 +229,7 @@ Private
 			ix.PokeInt i,buf.PeekInt(i)
 		Next
 
-		filter_saturate(0.2,buf)
+		filter_saturate(0.3,buf)
 		
 		' reduce noise
 		filter_gaussian(10,buf)
@@ -228,9 +241,9 @@ Private
 		'greys
 		pal[0]=$ffffff
 		pal[1]=$d8d8d8
-		pal[2]=$adadad
-		pal[3]=$8d8d8d
-		pal[4]=$525252
+'		pal[2]=$adadad
+'		pal[3]=$8d8d8d
+'		pal[4]=$525252
 		pal[5]=$2d2d2d
 		pal[6]=$000000
 		' reds
@@ -264,7 +277,8 @@ Private
 '		filter_bit(3,buf)
 		
 		' draw lines
-		filter_edge(thick,ix,buf)
+		filter_edge(thick,ix,buf,false)
+'		write(ix,buf)
 	End
 
 	Method filter_gaussian:Void(size:Int,buf:DataBuffer)
@@ -324,8 +338,8 @@ Private
 		If size<1 Then Return
 		Local d:DataBuffer = New DataBuffer(w*h*4)
 
-		For Local i:Int = size Until h-size
-		For Local j:Int = size Until w-size
+		For Local i:Int = 0 Until w
+ 		For Local j:Int = 0 Until h
 
 			Local r:Int=0
 			Local g:Int=0
@@ -333,10 +347,10 @@ Private
 			Local s:Int=0
 			Local c:Int
 
-			For Local p:Int = Max(-size,-i) To Min(size,w-i)
-			For Local q:Int = Max(-size,-j) To Min(size,h-j)
+			For Local p:Int = Max(-size,-i) To Min(size,w-i-1)
+			For Local q:Int = Max(-size,-j) To Min(size,h-j-1)
 
-				c = buf.PeekInt( ((j+p) + ((i+q)*w))*4 )
+				c = buf.PeekInt( ((i+p) + ((j+q)*w))*4 )
 				r+=((c Shr 16) & 255)
 				g+=((c Shr 8) & 255)
 				b+=((c Shr 0) & 255)
@@ -350,7 +364,7 @@ Private
 				g/=s
 				b/=s
 
-				d.PokeInt (j + i*w)*4, $ff000000 + (r Shl 16) + (g Shl 8) + (b Shl 0)
+				d.PokeInt (i + j*w)*4, $ff000000 + (r Shl 16) + (g Shl 8) + (b Shl 0)
 			End
 		Next
 		Next

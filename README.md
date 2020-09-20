@@ -4,6 +4,10 @@ V1.0.0 19-09-2020
 
 + Inital release
 
+# License
+
+Free to use. Use at your own risk.
+
 ## Class ImageFilter
 
 The ImageFilter module provides simple support for applying various image filters to your gfx.

@@ -2,8 +2,8 @@ Strict
 Import mojo2
 Import imagefilter
 
-#GLFW_WINDOW_WIDTH=1024
-#GLFW_WINDOW_HEIGHT=640
+#GLFW_WINDOW_WIDTH=800
+#GLFW_WINDOW_HEIGHT=600
 
 Class myClass Extends App
 	Field imgf:ImageFilter
@@ -15,11 +15,11 @@ Class myClass Extends App
 		SetUpdateRate(60)
 		cnvs = New Canvas
 
-		img = Image.Load("dales.jpg",0,0)
+		img = Image.Load("llandudno.jpg",0,0)
 
 		imgf = New ImageFilter(img)
 		
-		filter=0
+		filter=-1
 		thick=1
 		
 		imgf.CreateSnapshot()		
@@ -30,7 +30,22 @@ Class myClass Extends App
 
 	Method CreateImage:Void()
 		imgf.RevertSnapshot()
-		imgf.ApplyFilter(filter,thick)
+		If filter>-1
+			Select filter
+			Case ImageFilter.SATURATE
+				imgf.ApplyFilter(ImageFilter.SATURATE,Float(thick)/10.0)
+			Case ImageFilter.BRIGHTNESS
+				imgf.ApplyFilter(ImageFilter.BRIGHTNESS,Float(thick)/10.0)
+			Case ImageFilter.GAUSSIAN
+				imgf.ApplyFilter(ImageFilter.GAUSSIAN,thick*4)
+			Case ImageFilter.MEAN
+				imgf.ApplyFilter(ImageFilter.MEAN,thick*4)
+			Case ImageFilter.REDUCE
+				imgf.ApplyFilter(ImageFilter.REDUCE,Pow(2,thick+1))
+			Default
+				imgf.ApplyFilter(filter,thick)
+			End
+		End
 	End
 	
 	Method OnUpdate:Int()
@@ -49,7 +64,7 @@ Class myClass Extends App
 
 		If KeyHit(KEY_SPACE)
 			filter+=1
-			If filter>ImageFilter.TOON Then filter=0
+			If filter>ImageFilter.BRIGHTNESS Then filter=-1
 			CreateImage()
 		End
 		Return 0
@@ -58,6 +73,10 @@ Class myClass Extends App
 	Method OnRender:Int()
 		cnvs.Clear (0,0.5,0)
 		cnvs.DrawImage imgf.GetImage(),0,0
+		
+		cnvs.DrawText "Press SPACE to change filter",20,20
+		cnvs.DrawText "Press 1-3 to change effect of filter",20,40
+		
 		cnvs.Flush
 
 		Return 0
