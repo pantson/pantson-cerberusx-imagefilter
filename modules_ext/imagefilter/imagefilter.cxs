@@ -23,7 +23,7 @@ Public
 	Const MEAN:=5
 	Const GAUSSIAN:=6
 	Const EDGE:=7
-	Const CEL:=8
+	Const TOON:=8
 	Const REDUCE:=9
 	Const BRIGHTNESS:=10
 
@@ -155,8 +155,8 @@ Private
 			filter_gaussian(Int(v),buf)
 		Case EDGE
 			filter_edge(Int(v),buf,buf)
-		Case CEL
-			filter_cel(Int(v),buf)
+		Case TOON
+			filter_toon(Int(v),buf)
 		Case REDUCE
 			filter_reduce_colours(Int(v),buf)
 		Case BRIGHTNESS
@@ -205,7 +205,7 @@ Private
 		Next
 	End
 
-	Method filter_cel:Void(thick:Int,buf:DataBuffer)
+	Method filter_toon:Void(thick:Int,buf:DataBuffer)
 		If thick<1 Then Return
 		If thick>3 Then thick=3
 
@@ -216,15 +216,52 @@ Private
 			ix.PokeInt i,buf.PeekInt(i)
 		Next
 
-'		filter_saturate(0.2,buf)
+		filter_saturate(0.2,buf)
 		
 		' reduce noise
-		filter_gaussian(5,buf)
-		filter_stretch(buf)
+		filter_gaussian(10,buf)
+'		filter_stretch(buf)
 		
 		' reduce colours in pic
-'		filter_reduce_colours(32,buf)
-		filter_bit(3,buf)
+'		Local pal:Int[] = filter_reduce_colours(32,buf)
+		Local pal:Int[24]
+		'greys
+		pal[0]=$ffffff
+		pal[1]=$d8d8d8
+		pal[2]=$adadad
+		pal[3]=$8d8d8d
+		pal[4]=$525252
+		pal[5]=$2d2d2d
+		pal[6]=$000000
+		' reds
+		pal[7]=$fb1b02
+		pal[8]=$ba1301
+		'greens
+		pal[9]=$40ff00
+		pal[10]=$2fbb00
+		' blues
+		pal[11]=$004abb
+		pal[12]=$00568c
+		' yellows
+		pal[13]=$fff205
+		pal[14]=$cac000
+		' purple
+		pal[15]=$c803f1
+		pal[16]=$9702b7
+		' cyan
+		pal[17]=$02d8d8
+		pal[18]=$01afaf
+		' pink
+		pal[19]=$f7c0a6
+		pal[20]=$f4ab88
+		pal[21]=$f08d5e
+		' browns
+		pal[22]=$c46c15
+		pal[23]=$985410
+	
+		filter_recolour(pal,buf)
+		
+'		filter_bit(3,buf)
 		
 		' draw lines
 		filter_edge(thick,ix,buf)
@@ -255,18 +292,18 @@ Private
 		Next
 		Next
 
-		For Local i:Int = size Until h-size
-		For Local j:Int = size Until w-size
+		For Local i:Int = 0 Until w
+		For Local j:Int = 0 Until h
 
 			Local r:Float=0
 			Local g:Float=0
 			Local b:Float=0
 			Local c:Int
 
-			For Local p:Int = -size Until size
-			For Local q:Int = -size Until size
+			For Local p:Int = Max(-size,-i) To Min(size,w-i-1)
+			For Local q:Int = Max(-size,-j) To Min(size,h-j-1)
 
-				c = buf.PeekInt( ((j+p) + ((i+q)*w))*4 )
+				c = buf.PeekInt( ((i+p) + ((j+q)*w))*4 )
 				r+= ((c Shr 16) & 255) * k[p+size + (q+size)*(2*size+1)]
 				g+= ((c Shr 8) & 255) * k[p+size + (q+size)*(2*size+1)]
 				b+= ((c Shr 0) & 255) * k[p+size + (q+size)*(2*size+1)]
@@ -274,7 +311,7 @@ Private
 			Next
 			Next
 
-			d.PokeInt (j + i*w)*4, $ff000000 + (Int(r) Shl 16) + (Int(g) Shl 8) + (Int(b) Shl 0)
+			d.PokeInt (i + j*w)*4, $ff000000 + (Int(r) Shl 16) + (Int(g) Shl 8) + (Int(b) Shl 0)
 		Next
 		Next
 
@@ -296,8 +333,8 @@ Private
 			Local s:Int=0
 			Local c:Int
 
-			For Local p:Int = -size To size
-			For Local q:Int = -size To size
+			For Local p:Int = Max(-size,-i) To Min(size,w-i)
+			For Local q:Int = Max(-size,-j) To Min(size,h-j)
 
 				c = buf.PeekInt( ((j+p) + ((i+q)*w))*4 )
 				r+=((c Shr 16) & 255)
@@ -411,11 +448,11 @@ Private
 		Return [minv,maxv,maxv-minv]
 	End
 
-	Method filter_reduce_colours:Void(n:Int,buf:DataBuffer)
-		filter_reduce_colours(n,buf,0,0,w,h)
+	Method filter_reduce_colours:Int[](n:Int,buf:DataBuffer)
+		Return filter_reduce_colours(n,buf,0,0,w,h)
 	End
 
-	Method filter_reduce_colours:Void(n:Int,buf:DataBuffer,x:Int,y:Int,w:Int,h:Int)
+	Method filter_reduce_colours:Int[](n:Int,buf:DataBuffer,x:Int,y:Int,w:Int,h:Int)
 		Local a:Int, r:Int, g:Int, b:Int, c:Int
 		Local p:Int,q:Int
 		Local tmp:Int[]
@@ -477,18 +514,55 @@ Private
 
 		tmp = tmp.Resize(0) 
 		'Return new_pal
+		
+		Return new_pal
+	End
 
+	Method filter_recolour2:Void(new_pal:Int[],buf:DataBuffer)
+		Local r:Int,g:Int,b:Int,col:Int,src_c:Color,dst_c:Color
+		src_c = New Color()
+		dst_c = New Color()
 		For Local i:Int=0 Until buf.Length() Step 4
-			r = buf.PeekInt(i)
-			g = (r Shr 8) & 255
-			b = (r Shr 0) & 255
-			r = (r Shr 16) & 255
+			col = buf.PeekInt(i)
+			src_c.Set(col)
+			r = (col Shr 16) & 255
+			g = (col Shr 8) & 255
+			b = (col Shr 0) & 255
 
 			Local bestdiff:Int = 999999
 			Local diff:Int =0 
 
 			Local c:Int = 0
-			For Local p:Int = 0 Until n
+			For Local p:Int = 0 Until new_pal.Length
+				dst_c.Set(new_pal[p])
+				diff = Abs(((new_pal[p] Shr 16) & 255) - r)
+				diff = diff + Abs(((new_pal[p] Shr 8) & 255) - g)
+				diff = diff + Abs(((new_pal[p] Shr 0) & 255) - b)
+				diff = Abs(src_c.hue - dst_c.hue) * (Abs(src_c.bri-dst_c.bri)) * (Abs(src_c.sat-dst_c.sat))
+				If diff < bestdiff
+					c = p
+					bestdiff = diff
+					'Print diff
+				End
+			Next
+
+			buf.PokeInt(i,$ff000000 + new_pal[c])
+		Next
+	End
+	
+	Method filter_recolour:Void(new_pal:Int[],buf:DataBuffer)
+		Local r:Int,g:Int,b:Int,col:Int
+		For Local i:Int=0 Until buf.Length() Step 4
+			col = buf.PeekInt(i)
+			r = (col Shr 16) & 255
+			g = (col Shr 8) & 255
+			b = (col Shr 0) & 255
+
+			Local bestdiff:Int = 999999
+			Local diff:Int =0 
+
+			Local c:Int = 0
+			For Local p:Int = 0 Until new_pal.Length
 				diff = Abs(((new_pal[p] Shr 16) & 255) - r)
 				diff = diff + Abs(((new_pal[p] Shr 8) & 255) - g)
 				diff = diff + Abs(((new_pal[p] Shr 0) & 255) - b)
@@ -499,7 +573,7 @@ Private
 				End
 			Next
 
-			buf.PokeInt(i,new_pal[c])
+			buf.PokeInt(i,$ff000000 + new_pal[c])
 		Next
 	End
 

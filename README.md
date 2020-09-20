@@ -4,7 +4,7 @@ V1.0.0 19-09-2020
 
 + Inital release
 
-## Class imagefilter.ImageFilter
+## Class ImageFilter
 
 The ImageFilter module provides simple support for applying various image filters to your gfx.
 
@@ -55,27 +55,57 @@ Function Main:Int()
 	' Create an instance of your class that you have defined above.
 	New myClass
 	Return 0
-End</pre>
+End
+```
 
-# Const GAUSSIAN
-# Const REDUCE
-# Const SATURATE
-# Const GREYSCALE
-# Const NEGATIVE
-
-# Method New(img:Image)
+<a name="ImageFilter.New(img"></a>
+### Method New(img:Image)
 
 Initialises a new filter and data stack with data from the specified image.
 
-# Method SetImage:Void(img:Image)
+<a name="ImageFilter.SetImage"></a>
+### Method SetImage:Void(img:Image)
 
 Resets the data stack with data from the specified image.
 
-# Method ApplyFilter:Void(filter:Int)
+<a name="ImageFilter.ApplyFilter"></a>
+### Method ApplyFilter:Void(filter:Int)
 
-# Method ApplyFilter:Void(filter:Int,v:Float)
+Apply filter to image stack. These filters are not configurable. **filter** should be one of
 
-# Method ApplyFilter:Void(filter:Int,v:Float,buffer:Int)
+| **Filter** | **Description** |
+| :-- | :-- |
+| ImageFilter.NEGATIVE | Produce a negative image |
+| ImageFilter.GREYSCALE | Turns a colour image into greyscale |
+| ImageFilter.STRETCH | Stretches the brightness from 0 to 1. |
 
-# Method GetImage:Image()
+<a name="ImageFilter.ApplyFilter"></a>
+### Method ApplyFilter:Void(filter:Int,v:Float) |
 
+Apply filter to image stack. Use v to configure the filter. **filter** should be one of
+
+| **Filter** | **Description** |
+| :-- | :-- |
+| ImageFilter.MEAN | Blurs the image using a mean value of a square. **v** is the pixel size of the square. |
+| ImageFilter.GUASSIAN | Blurs the image, low radius can be used to remove noise from an image. **v** is the radius of the blur. |
+| ImageFilter.SATURATE | Change the saturation of the image. **v** is between -1 and 1. |
+| ImageFilter.BRIGHTNESS | Change the brightness of the image. **v** is between -1 and 1. |
+| ImageFilter.REDUCE | Reduces the number of colours in the image to **v** colours. |
+| ImageFilter.BIT | Reduces the bit level of an image to **v** for a retro look. Bit level is from 1 to 8 |
+| ImageFilter.EDGE | Finds the edges of the image. **v** is the thickness of the edge. |
+| ImageFilter.TOON | Produces a cartoon like image. **v** is the thickness of the lines |
+
+<a name="ImageFilter.GetImage"></a>
+### Method GetImage:Image() |
+
+Return the the new image with filters applied.
+
+<a name="ImageFilter.CreateSnapshot"></a>
+### Method CreateSnapshot:Void()
+
+Snapshot the current stack, so that you can revert later.
+
+<a name="ImageFilter.RevertSnapshot"></a>
+### Method RevertSnapshot:Void()
+
+Revert to the current snapshot.

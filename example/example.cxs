@@ -8,7 +8,7 @@ Import imagefilter
 Class myClass Extends App
 	Field imgf:ImageFilter
 	Field img:Image
-
+	Field filter:Int,thick:Int
 	Field cnvs:Canvas
 
 	Method OnCreate:Int()
@@ -18,27 +18,40 @@ Class myClass Extends App
 		img = Image.Load("dales.jpg",0,0)
 
 		imgf = New ImageFilter(img)
-		' remove noise
-'		imgf.ApplyFilter(ImageFilter.GAUSSIAN,5)
-		' store copy in snapshot
-'		imgf.CreateSnapshot()
-		' create an edge in the snapshot
-'		imgf.ApplyFilter(ImageFilter.EDGE,2,ImageFilter.SNAPSHOT)
-
-		' apply colour bit depth 
-'		imgf.ApplyFilter(ImageFilter.SATURATE,0.2)
-'		imgf.ApplyFilter(ImageFilter.REDUCE,32)
-		' draw line edges on top
-'		imgf.DrawSnapshot()
-
-'		imgf.SetImage(img)
-		imgf.ApplyFilter(ImageFilter.CEL,2)
+		
+		filter=0
+		thick=1
+		
+		imgf.CreateSnapshot()		
+		CreateImage()
 			   
 		Return 0
 	End
 
+	Method CreateImage:Void()
+		imgf.RevertSnapshot()
+		imgf.ApplyFilter(filter,thick)
+	End
+	
 	Method OnUpdate:Int()
-		If KeyHit(KEY_SPACE) Then imgf.RevertSnapshot()
+		If KeyHit(KEY_1)
+			thick=1
+			CreateImage()
+		End
+		If KeyHit(KEY_2)
+			thick=2
+			CreateImage()
+		End
+		If KeyHit(KEY_3)
+			thick=3
+			CreateImage()
+		End
+
+		If KeyHit(KEY_SPACE)
+			filter+=1
+			If filter>ImageFilter.TOON Then filter=0
+			CreateImage()
+		End
 		Return 0
 	End
 
