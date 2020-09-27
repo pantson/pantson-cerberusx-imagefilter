@@ -8,7 +8,7 @@ Import imagefilter
 Class myClass Extends App
 	Field imgf:ImageFilter
 	Field img:Image
-	Field filter:Int,thick:Int
+	Field filter:Int,effect:Int
 	Field cnvs:Canvas
 
 	Method OnCreate:Int()
@@ -18,11 +18,11 @@ Class myClass Extends App
 		img = Image.Load("llandudno.jpg",0,0)
 
 		imgf = New ImageFilter(img)
+		imgf.CreateSnapshot()		
 		
 		filter=-1
-		thick=1
-		
-		imgf.CreateSnapshot()		
+		effect=1
+				
 		CreateImage()
 			   
 		Return 0
@@ -33,32 +33,34 @@ Class myClass Extends App
 		If filter>-1
 			Select filter
 			Case ImageFilter.SATURATE
-				imgf.ApplyFilter(ImageFilter.SATURATE,Float(thick)/10.0)
+				imgf.ApplyFilter(ImageFilter.SATURATE,Float(effect)/10.0)
 			Case ImageFilter.BRIGHTNESS
-				imgf.ApplyFilter(ImageFilter.BRIGHTNESS,Float(thick)/10.0)
+				imgf.ApplyFilter(ImageFilter.BRIGHTNESS,Float(effect)/10.0)
 			Case ImageFilter.GAUSSIAN
-				imgf.ApplyFilter(ImageFilter.GAUSSIAN,thick*4)
+				imgf.ApplyFilter(ImageFilter.GAUSSIAN,effect*4)
 			Case ImageFilter.MEAN
-				imgf.ApplyFilter(ImageFilter.MEAN,thick*4)
+				imgf.ApplyFilter(ImageFilter.MEAN,effect*4)
 			Case ImageFilter.REDUCE
-				imgf.ApplyFilter(ImageFilter.REDUCE,Pow(2,thick+1))
+				imgf.ApplyFilter(ImageFilter.REDUCE,Pow(2,effect+1))
+			Case ImageFilter.TINT
+				imgf.ApplyFilter(ImageFilter.TINT,[$ff00ff,1/4.0*effect])
 			Default
-				imgf.ApplyFilter(filter,thick)
+				imgf.ApplyFilter(filter,effect)
 			End
 		End
 	End
 	
 	Method OnUpdate:Int()
 		If KeyHit(KEY_1)
-			thick=1
+			effect=1
 			CreateImage()
 		End
 		If KeyHit(KEY_2)
-			thick=2
+			effect=2
 			CreateImage()
 		End
 		If KeyHit(KEY_3)
-			thick=3
+			effect=3
 			CreateImage()
 		End
 

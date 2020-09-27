@@ -99,6 +99,17 @@ Apply filter to image stack. Use v to configure the filter. **filter** should be
 | ImageFilter.EDGE | Finds the edges of the image. **v** is the thickness of the edge. |
 | ImageFilter.TOON | Produces a cartoon like image. **v** is the thickness of the lines |
 
+<a name="ImageFilter.ApplyFilter"></a>
+### Method ApplyFilter:Void(filter:Int,v:Float[]) |
+
+Some images filters need more then one value.
+
+Use v[] to configure the filter. **filter** should be one of
+
+| **Filter** | **Description** |
+| :-- | :-- |
+| ImageFilter.TINT | Tints the image using color RGB in **v[0]** with initensity v[1] , where 0.0 < **v[1]** < 1.0 |
+
 <a name="ImageFilter.GetImage"></a>
 ### Method GetImage:Image() |
 

@@ -93,6 +93,15 @@ Apply filter to image stack. Use v to configure the filter. @filter should be on
 | ImageFilter.EDGE 	| Finds the edges of the image. @v is the thickness of the edge.
 | ImageFilter.TOON	| Produces a cartoon like image. @v is the thickness of the lines
 
+# Method ApplyFilter:Void(filter:Int,v:Float[])
+
+Some images filters need more then one value.
+
+Use v[] to configure the filter. @filter should be one of
+
+| @Filter				| @Description
+| ImageFilter.TINT	| Tints the image using color RGB in @v[0] with initensity v[1] , where 0.0 < @v[1] < 1.0
+
 # Method GetImage:Image()
 
 Return the the new image with filters applied.

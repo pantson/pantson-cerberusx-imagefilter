@@ -25,8 +25,11 @@ Public
 	Const EDGE:=7
 	Const TOON:=8
 	Const REDUCE:=9
-	Const BRIGHTNESS:=10
-
+	Const TINT:=10
+	Const BRIGHTNESS:=11
+	Const PAPER:=12
+	Const RESIZE:=13
+	
 	Const STACK:=0
 	Const SNAPSHOT:=1
 
@@ -45,13 +48,24 @@ Public
 		cnvs.Flush()
 		cnvs.ReadPixels(0,0,w,h,db,0,0)
 
+		' de-premultiply the colours
 		For Local i:Int = 0 Until db.Length() Step 4
-			db.PokeInt i,abgr2argb(DrawList.PremultiplyArgb2Abgr(db.PeekInt(i))) & $ffffff + $ff000000
+			Local abgr:Int = db.PeekInt(i)
+			Local a:Int = (abgr Shr 24) & $ff
+			If a>0
+				Local r:Int = Min(255.0,255.0/Float(a)*((abgr Shr 0) & $ff))
+				Local g:Int = Min(255.0,255.0/Float(a)*((abgr Shr 8) & $ff))
+				Local b:Int = Min(255.0,255.0/Float(a)*((abgr Shr 16) & $ff))
+				Local argb:Int = a Shl 24 + r Shl 16 + g Shl 8 + b
+				db.PokeInt i,argb
+			End
 		End
 
 		CreateSnapshot()
 
 		i.Discard()
+		
+		change = True
 	End
 
 	Method RevertSnapshot:Void()
@@ -104,14 +118,27 @@ Public
 	End
 
 	Method ApplyFilter:Void(effect:Int)
-		ApplyFilter(effect,0,STACK)
+		ApplyFilter(effect,[0.0],STACK)
 	End
 
 	Method ApplyFilter:Void(effect:Int,v:Float)
+		ApplyFilter(effect,[v],STACK)
+	End
+
+	Method ApplyFilter:Void(effect:Int,v:Float[])
 		ApplyFilter(effect,v,STACK)
 	End
 
-	Method ApplyFilter:Void(effect:Int,v:Float,buffer:Int)
+	Method ApplyFilter:Void(effect:Int,v:Int[])
+		Local v_f:Float[v.Length()]
+		For Local i:Int = 0 Until v.Length()
+			v_f[i] = v[i]
+		Next
+		
+		ApplyFilter(effect,v_f,STACK)
+	End
+	
+	Method ApplyFilter:Void(effect:Int,v:Float[],buffer:Int)
 		Local buf:DataBuffer
 
 		Select buffer
@@ -126,9 +153,20 @@ Public
 
 	Method GetImage:Image()
 		If change=True
+			For Local i:Int = 0 Until db.Length() Step 4
+				db.PokeInt i,DrawList.PremultiplyArgb2Abgr(db.PeekInt(i))
+
+'				db.PokeInt i,abgr2argb(db.PeekInt(i))
+			End
+
 			If img Then img.Discard()
 			img = New Image(w,h,ox,oy)
 			img.WritePixels(0,0,w,h,db,0,0)
+
+			For Local i:Int = 0 Until db.Length() Step 4
+				db.PokeInt i,DrawList.PremultiplyArgb2Abgr(db.PeekInt(i))
+'				db.PokeInt i,abgr2argb(db.PeekInt(i))
+			End
 		End
 
 		change=False
@@ -137,7 +175,7 @@ Public
 	End
 
 Private
-	Method applyfilter:Void(effect:Int,v:Float,buf:DataBuffer)
+	Method applyfilter:Void(effect:Int,v:Float[],buf:DataBuffer)
 		Select effect
 		Case NEGATIVE
 			filter_negative(buf)
@@ -146,21 +184,42 @@ Private
 		Case STRETCH
 			filter_stretch(buf)
 		Case BIT
-			filter_bit(Int(v),buf)
+			filter_bit(Int(v[0]),buf)
 		Case SATURATE
-			filter_saturate(v,buf)
+			filter_saturate(v[0],buf)
 		Case MEAN
-			filter_mean(Int(v),buf)
+			filter_mean(Int(v[0]),buf)
 		Case GAUSSIAN
-			filter_gaussian(Int(v),buf)
+			filter_gaussian(Int(v[0]),buf)
 		Case EDGE
-			filter_edge(Int(v),buf,buf)
+			filter_edge(Int(v[0]),buf,buf)
 		Case TOON
-			filter_toon(Int(v),buf)
+			filter_toon(Int(v[0]),buf)
 		Case REDUCE
-			filter_recolour(filter_reduce_colours(Int(v),buf),buf)
+			filter_recolour(filter_reduce_colours(Int(v[0]),buf),buf)
 		Case BRIGHTNESS
-			filter_brightness(v,buf)
+			filter_brightness(v[0],buf)
+		Case PAPER
+			filter_paper(buf,v[0])
+		Case RESIZE
+			Local new_buf:DataBuffer = New DataBuffer(Int(v[0])*Int(v[1])*4)
+			filter_resize(buf,Int(v[0]),Int(v[1]),new_buf)
+
+			w=Int(v[0])
+			h=Int(v[1])
+			If buf=db
+				db=New DataBuffer(new_buf.Length())
+				For Local i:Int = 0 Until db.Length Step 4
+					db.PokeInt i,new_buf.PeekInt(i)
+				Next
+			Else
+				snap=New DataBuffer(new_buf.Length())
+				For Local i:Int = 0 Until snap.Length Step 4
+					snap.PokeInt i,new_buf.PeekInt(i)
+				Next
+			End
+		Case TINT
+			filter_tint(buf,Int(v[0]),v[1])
 		End
 
 		change=True
@@ -218,10 +277,11 @@ Private
 		Next
 	End
 
-	Method filter_toon:Void(thick:Int,buf:DataBuffer)
+	Method filter_paper:Void(buf:DataBuffer,thick:Int=1)
 		If thick<1 Then Return
 		If thick>3 Then thick=3
 
+		Local sz:Int =8
 
 		' copy to tmp buffer for edging 
 		Local ix:DataBuffer = New DataBuffer(db.Length())
@@ -229,21 +289,116 @@ Private
 			ix.PokeInt i,buf.PeekInt(i)
 		Next
 
-		filter_saturate(0.3,buf)
+		Print "paper"
+		Local random:Int=thick
+		For Local i:Int=0 Until buf.Length()
+			random+=(buf.PeekInt(i) & $ffffff)
+		Next
 		
+		Local tmp_img:Image = New Image(w,h)
+		Local cnvs:Canvas = New Canvas(tmp_img)
+		cnvs.Clear 1,0,0,0
+'		filter_gaussian(10,buf)		
+
+		Local c:DataBuffer = New DataBuffer(w/sz*h/sz*4)
+		filter_resize(buf,w/sz,h/sz,c)
+		Local pal:Int[] = filter_reduce_colours(16,buf)
+
+		filter_tint(c,$ffffff,0.25)	
+		filter_recolour(pal,c)
+'		filter_brightness(0.3,c)
+		
+		For Local j:Int = 0 Until h/sz
+		For Local i:Int = 0 Until w/sz
+			Local col:Int = (c.PeekInt((i + j*(w/sz))*4) & $ffffff)
+'			Local col:Int = $ffffff
+			Local r:Int=(col Shr 16) & 255
+			Local g:Int=(col Shr 8) & 255
+			Local b:Int=(col Shr 0) & 255
+			cnvs.SetColor r/255.0,g/255.0,b/255.0
+			cnvs.DrawRect i*sz-sz/2,j*sz-sz/2,sz,sz
+		Next
+		Next
+		
+		cnvs.Flush
+'		buf=Null
+'		w=w*16
+'		h=h*16
+		
+'		buf = New DataBuffer(w*h*4)
+		cnvs.ReadPixels(0,0,w,h,buf,0,0)
+		
+		' de-premultiply the colours
+		For Local i:Int = 0 Until db.Length() Step 4
+			Local abgr:Int = buf.PeekInt(i)
+			Local a:Int = (abgr Shr 24) & $ff
+			If a>0
+				Local r:Int = Min(255.0,255.0/Float(a)*((abgr Shr 0) & $ff))
+				Local g:Int = Min(255.0,255.0/Float(a)*((abgr Shr 8) & $ff))
+				Local b:Int = Min(255.0,255.0/Float(a)*((abgr Shr 16) & $ff))
+				Local argb:Int = a Shl 24 + r Shl 16 + g Shl 8 + b
+				buf.PokeInt i,argb
+			End
+		End
+
+
+		' draw lines but not none lines
+		filter_edge(thick,ix,buf,False)
+
+		tmp_img.Discard
+		
+		change=True
+	End
+	
+	Method filter_resize:Void(buf:DataBuffer,new_w:Int,new_h:Int,buf2:DataBuffer)
+		
+		Local sz_x:Float = w/Float(new_w)
+		Local sz_y:Float = h/Float(new_h)
+		Local j:Float=0
+		Local q:Int=0
+		While j<h
+		
+			Local i:Float = 0
+			Local p:Int= 0 
+			While i<w
+				Local col:Int = buf.PeekInt((Int(i) + (Int(j)*w))*4) & $ffffffff
+				buf2.PokeInt((p + q*new_w)*4,col)
+				i+=sz_x
+				p+=1
+			Wend
+			j+=sz_y
+			q+=1
+		Wend
+	End
+	
+	Method filter_toon:Void(thick:Int,buf:DataBuffer)
+		If thick<1 Then Return
+		If thick>3 Then thick=3
+
+		' copy to tmp buffer for edging 
+		Local ix:DataBuffer = New DataBuffer(db.Length())
+		For Local i:Int=0 Until buf.Length() Step 4
+			ix.PokeInt i,buf.PeekInt(i)
+		Next
+
+		' saturate to add more colour
+		filter_saturate(0.2,buf)
+		
+		' stretch
+		filter_stretch(buf)
+
 		' reduce noise
 		filter_gaussian(10,buf)
-'		filter_stretch(buf)
+		
 		
 		' reduce colours in pic
-'		Local pal:Int[] = filter_reduce_colours(32,buf)
 		Local pal:Int[24]
 		'greys
 		pal[0]=$ffffff
 		pal[1]=$d8d8d8
-'		pal[2]=$adadad
-'		pal[3]=$8d8d8d
-'		pal[4]=$525252
+		pal[2]=$adadad
+		pal[3]=$8d8d8d
+		pal[4]=$525252
 		pal[5]=$2d2d2d
 		pal[6]=$000000
 		' reds
@@ -265,20 +420,19 @@ Private
 		pal[17]=$02d8d8
 		pal[18]=$01afaf
 		' pink
-		pal[19]=$f7c0a6
-		pal[20]=$f4ab88
-		pal[21]=$f08d5e
+		pal[19]=$f7ad8a
+		pal[20]=$c89968
+		pal[21]=$aa8358
 		' browns
 		pal[22]=$c46c15
 		pal[23]=$985410
+
+'		pal = filter_reduce_colours(32,buf)
 	
 		filter_recolour(pal,buf)
 		
-'		filter_bit(3,buf)
-		
-		' draw lines
-		filter_edge(thick,ix,buf,false)
-'		write(ix,buf)
+		' draw lines but not none lines
+		filter_edge(thick,ix,buf,False)
 	End
 
 	Method filter_gaussian:Void(size:Int,buf:DataBuffer)
@@ -388,6 +542,22 @@ Private
 			Local a:Int = Min(255,Int(((col Shr 16) & 255)*0.299) + Int(((col Shr 8) & 255)*0.587) + Int(((col Shr 0) & 255)*0.114) )
 
 			dst_buf.PokeInt i,($ff000000) + a Shl 16 + a Shl 8 + a
+		Next
+	End
+
+	Method filter_tint:Void(buf:DataBuffer,tint_col:Int,l:Float=0.5)
+		For Local i:Int = 0 Until buf.Length() Step 4
+			Local col:Int = buf.PeekInt(i) & $ffffff
+			Local r:Int = (col Shr 16) & 255
+			r+=(((tint_col Shr 16) & 255)-r )*l
+			Local g:Int = (col Shr 8) & 255
+			g+=(((tint_col Shr 8) & 255)-g )*l
+			Local b:Int = (col Shr 0) & 255
+			b+=(((tint_col Shr 0) & 255)-b )*l
+
+			Local a:Int = (r Shl 16) + (g Shl 8) + b
+
+			buf.PokeInt i,($ff000000) + a
 		Next
 	End
 
@@ -522,7 +692,7 @@ Private
 			g = g / len
 			b = b / len
 
-			new_pal[q/len] = $ff000000 + (r Shl 16) + (g Shl 8) + b
+			new_pal[q/len] = $ffffff & (r Shl 16) + (g Shl 8) + b
 			q+=len
 		Wend
 
@@ -567,7 +737,8 @@ Private
 	Method filter_recolour:Void(new_pal:Int[],buf:DataBuffer)
 		Local r:Int,g:Int,b:Int,col:Int
 		For Local i:Int=0 Until buf.Length() Step 4
-			col = buf.PeekInt(i)
+			col = (buf.PeekInt(i) & $ffffff)
+		    
 			r = (col Shr 16) & 255
 			g = (col Shr 8) & 255
 			b = (col Shr 0) & 255
@@ -578,8 +749,8 @@ Private
 			Local c:Int = 0
 			For Local p:Int = 0 Until new_pal.Length
 				diff = Abs(((new_pal[p] Shr 16) & 255) - r)
-				diff = diff + Abs(((new_pal[p] Shr 8) & 255) - g)
-				diff = diff + Abs(((new_pal[p] Shr 0) & 255) - b)
+				diff += Abs(((new_pal[p] Shr 8) & 255) - g)
+				diff += Abs(((new_pal[p] Shr 0) & 255) - b)
 				If diff < bestdiff
 					c = p
 					bestdiff = diff
@@ -587,7 +758,8 @@ Private
 				End
 			Next
 
-			buf.PokeInt(i,$ff000000 + new_pal[c])
+			buf.PokeInt(i,$ff000000 | (new_pal[c] & $ffffff))
+'			buf.PokeInt(i,$ffff0000)' + (col & $ffffff))
 		Next
 	End
 
