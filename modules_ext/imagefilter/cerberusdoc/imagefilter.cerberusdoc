@@ -75,32 +75,32 @@ Resets the data stack with data from the specified image.
 Apply filter to image stack. These filters are not configurable. @filter should be one of
 
 | @Filter				| @Description
-| ImageFilter.NEGATIVE	| Produce a negative image
-| ImageFilter.GREYSCALE	| Turns a colour image into greyscale
-| ImageFilter.STRETCH	| Stretches the brightness from 0 to 1.
+| @ImageFilter.NEGATIVE	| Produce a negative image
+| @ImageFilter.GREYSCALE	| Turns a colour image into greyscale
+| @ImageFilter.STRETCH	| Stretches the brightness from 0 to 1.
 
 # Method ApplyFilter:Void(filter:Int,v:Float)
 
 Apply filter to image stack. Use v to configure the filter. @filter should be one of
 
 | @Filter				| @Description
-| ImageFilter.MEAN	| Blurs the image using a mean value of a square. @v is the pixel size of the square.
-| ImageFilter.GUASSIAN	| Blurs the image, low radius can be used to remove noise from an image. @v is the radius of the blur.
-| ImageFilter.SATURATE	| Change the saturation of the image. @v is between -1 and 1.
-| ImageFilter.BRIGHTNESS	| Change the brightness of the image. @v is between -1 and 1.
-| ImageFilter.REDUCE	| Reduces the number of colours in the image to @v colours.
-| ImageFilter.BIT	| Reduces the bit level of an image to @v for a retro look. Bit level is from 1 to 8
-| ImageFilter.EDGE 	| Finds the edges of the image. @v is the thickness of the edge.
-| ImageFilter.TOON	| Produces a cartoon like image. @v is the thickness of the lines
+| @ImageFilter.MEAN	| Blurs the image using a mean value of a square. @v is the pixel size of the square.
+| @ImageFilter.GUASSIAN	| Blurs the image, low radius can be used to remove noise from an image. @v is the radius of the blur.
+| @ImageFilter.SATURATE	| Change the saturation of the image. @v is between -1 and 1.
+| @ImageFilter.BRIGHTNESS	| Change the brightness of the image. @v is between -1 and 1.
+| @ImageFilter.REDUCE	| Reduces the number of colours in the image to @v colours.
+| @ImageFilter.BIT	| Reduces the bit level of an image to @v for a retro look. Bit level is from 1 to 8
+| @ImageFilter.EDGE 	| Finds the edges of the image. @v is the thickness of the edge.
+| @ImageFilter.TOON	| Produces a cartoon like image. @v is the thickness of the lines
 
 # Method ApplyFilter:Void(filter:Int,v:Float[])
 
 Some images filters need more then one value.
 
-Use v[] to configure the filter. @filter should be one of
+Use @v[] to configure the filter. @filter should be one of
 
 | @Filter				| @Description
-| ImageFilter.TINT	| Tints the image using color RGB in @v[0] with initensity v[1] , where 0.0 < @v[1] < 1.0
+| @ImageFilter.TINT	| Tints the image using color RGB in @v[0] with initensity @v[1] , where 0.0 < @v[1] < 1.0
 
 # Method GetImage:Image()
 
